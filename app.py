@@ -9,7 +9,7 @@ from PIL import Image
 import io
 import cv2
 import numpy as np
-import zxingcpp
+from pyzbar.pyzbar import decode
 import pandas as pd
 import matplotlib.pyplot as plt
 import plotly.express as px
@@ -1168,41 +1168,41 @@ def check_permission(required_permission: str) -> bool:
 # =============================================
 
 def process_barcode_image(image):
-    """Process an image to detect barcodes using zxing-cpp"""
+    """Process an image to detect barcodes with enhanced detection"""
     try:
-        # Convert PIL Image to numpy array
+        # Convert PIL Image to OpenCV format
         img = np.array(image.convert('RGB'))
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         
-        # Convert to grayscale (zxing works better with grayscale)
-        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        
-        # Apply some preprocessing to enhance barcode detection
+        # Apply image enhancements
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         gray = cv2.equalizeHist(gray)
         gray = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
                                    cv2.THRESH_BINARY, 11, 2)
         gray = cv2.medianBlur(gray, 3)
         
-        # Detect barcodes using zxing-cpp
-        results = zxingcpp.read_barcodes(gray)
+        # Try different barcode types
+        detected_barcodes = decode(gray)
         
-        if results:
+        if detected_barcodes:
             barcodes = []
-            for result in results:
+            for barcode in detected_barcodes:
                 try:
+                    barcode_data = barcode.data.decode("utf-8")
+                    barcode_type = barcode.type
                     barcodes.append({
-                        'data': result.text,
-                        'type': result.format.name,
-                        'position': result.position
+                        'data': barcode_data,
+                        'type': barcode_type,
+                        'polygon': barcode.polygon
                     })
-                except Exception as e:
-                    st.error(f"Error processing barcode result: {e}")
+                except:
                     continue
             return barcodes if barcodes else None
         return None
     except Exception as e:
         st.error(f"Barcode processing error: {e}")
         return None
-    
+
 def generate_barcode(product_id: str, product_name: str) -> str:
     """Generate a unique barcode for a product"""
     try:
@@ -1240,6 +1240,7 @@ def extract_product_info_from_barcode(barcode_data: str) -> dict:
 # Enhanced Barcode Scanner with Auto-Detection
 # =============================================
 
+
 def barcode_scanner():
     """Enhanced barcode scanning interface with auto-detection and better image processing"""
     if not check_permission("scan_products"):
@@ -1270,44 +1271,76 @@ def barcode_scanner():
             
             # Process image
             with st.spinner("Processing barcode..."):
-                barcodes = process_barcode_image(image)
-            
-            if barcodes:
-                st.success(f"✅ {len(barcodes)} barcode(s) detected!")
+                # Convert to numpy array and grayscale
+                img = np.array(image.convert('RGB'))
+                gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
                 
-                for barcode in barcodes:
-                    # Draw bounding box on the image
-                    img_with_boxes = np.array(image.convert('RGB'))
-                    
-                    if hasattr(barcode, 'position') and barcode.position:
-                        # Convert zxing position to OpenCV points
-                        points = [(int(p.x), int(p.y)) for p in barcode.position]
-                        points = np.array(points, dtype=np.int32)
+                # Apply adaptive thresholding
+                gray = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                           cv2.THRESH_BINARY, 11, 2)
+                
+                # Apply morphological operations to clean up the image
+                kernel = np.ones((3, 3), np.uint8)
+                gray = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel)
+                
+                # Try decoding with both processed and original images
+                detected_barcodes = []
+                
+                # First try with processed grayscale image
+                barcodes = decode(gray)
+                if barcodes:
+                    detected_barcodes.extend(barcodes)
+                
+                # If nothing found, try with original color image
+                if not detected_barcodes:
+                    barcodes = decode(img)
+                    if barcodes:
+                        detected_barcodes.extend(barcodes)
+            
+            if detected_barcodes:
+                st.success(f"✅ {len(detected_barcodes)} barcode(s) detected!")
+                
+                for barcode in detected_barcodes:
+                    try:
+                        barcode_data = barcode.data.decode("utf-8")
+                        barcode_type = barcode.type
                         
-                        # Draw polygon
-                        cv2.polylines(img_with_boxes, [points], True, (0, 255, 0), 3)
-                    
-                    st.image(img_with_boxes, caption=f"Detected {barcode['type']} Barcode", use_column_width=True)
-                    
-                    st.write(f"**Type:** {barcode['type']}")
-                    st.write(f"**Data:** `{barcode['data']}`")
-                    
-                    # Look up item in inventory
-                    item = db.get_inventory_item_by_barcode(barcode['data'])
-                    
-                    if item:
-                        st.success("🎉 Matching inventory item found!")
-                        display_product_details(item)
+                        # Draw bounding box on the image
+                        img_with_boxes = img.copy()
+                        points = barcode.polygon
+                        if len(points) > 4: 
+                            hull = cv2.convexHull(np.array([point for point in points], dtype=np.int32))
+                            cv2.polylines(img_with_boxes, [hull], True, (0, 255, 0), 3)
+                        else:
+                            cv2.polylines(img_with_boxes, [np.array(points, dtype=np.int32)], True, (0, 255, 0), 3)
                         
-                        # Quick update form
-                        with st.expander("Quick Update Item"):
-                            quick_update_form(item)
-                    else:
-                        st.warning("⚠️ No matching inventory item found for this barcode")
-                        handle_unknown_product(barcode['data'], barcode['type'])
+                        # Display processed image with bounding box
+                        st.image(img_with_boxes, caption=f"Detected {barcode_type} Barcode", use_column_width=True)
                         
+                        st.write(f"**Type:** {barcode_type}")
+                        st.write(f"**Data:** `{barcode_data}`")
+                        
+                        # Look up item in inventory
+                        item = db.get_inventory_item_by_barcode(barcode_data)
+                        
+                        if item:
+                            st.success("🎉 Matching inventory item found!")
+                            display_product_details(item)
+                            
+                            # Quick update form
+                            with st.expander("Quick Update Item"):
+                                quick_update_form(item)
+                        else:
+                            st.warning("⚠️ No matching inventory item found for this barcode")
+                            handle_unknown_product(barcode_data, barcode_type)
+                            
+                    except Exception as e:
+                        st.error(f"Error processing barcode: {str(e)}")
+                        continue
             else:
                 st.warning("⚠️ No barcode detected in the image")
+                # Show processed image for debugging
+                st.image(gray, caption="Processed Image (Grayscale)", use_column_width=True)
                 
         except Exception as e:
             st.error(f"Error processing image: {str(e)}")
