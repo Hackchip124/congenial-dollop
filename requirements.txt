@@ -7,5 +7,5 @@ pandas==2.1.1
 matplotlib==3.8.0
 plotly==5.18.0
 reportlab==4.0.4
-zxing-cpp==1.3.0
+pyzbar==0.1.9  # Replaces zxing-cpp
 python-multipart==0.0.6
