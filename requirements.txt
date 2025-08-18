@@ -1,11 +1,11 @@
 streamlit==1.32.0
 streamlit-option-menu==0.3.6
 pillow==10.1.0
-opencv-python==4.9.0.80
+opencv-python-headless==4.9.0.80  # Critical change
 numpy==1.26.0
 pandas==2.1.1
 matplotlib==3.8.0
 plotly==5.18.0
 reportlab==4.0.4
-pyzbar==0.1.9  # Replaces zxing-cpp
+pyzbar==0.1.9
 python-multipart==0.0.6
