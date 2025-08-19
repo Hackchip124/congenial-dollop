@@ -68,7 +68,6 @@ st.markdown("""
 # =============================================
 # Data Storage & Encryption (JSON-based)
 # =============================================
-
 class JSONDatabase:
     def __init__(self, db_path: str = "inventory_data.json"):
         self.db_path = db_path
@@ -86,42 +85,24 @@ class JSONDatabase:
             st.error(f"Error loading database: {e}")
             return {}
     
-    def _save_data(self):
-        """Save data to JSON file"""
-        try:
-            with open(self.db_path, 'w') as f:
-                json.dump(self.data, f, indent=4)
-            return True
-        except Exception as e:
-            st.error(f"Error saving database: {e}")
-            return False
-    
     def _initialize_db(self):
         """Initialize database with default structure if empty"""
-        if not self.data:
-            self.data = {
-                'users': [],
-                'inventory': [],
-                'suppliers': [],
-                'customers': [],
-                'transactions': [],
-                'invoices': [],
-                'invoice_items': [],
-                'audit_log': [],
-                'system_settings': [],
-                'backups': [],
-                'categories': [],
-                'subcategories': [],
-                'brands': [],
-                'locations': [],
-                'product_images': [],
-                'bank_accounts': [],
-                'payments': [],
-                'tax_rates': [],
-                'unknown_products': [],
-                'reports': []
-            }
-            
+        # Define all required keys
+        required_keys = [
+            'users', 'inventory', 'suppliers', 'customers', 'transactions',
+            'invoices', 'invoice_items', 'audit_log', 'system_settings',
+            'backups', 'categories', 'subcategories', 'brands', 'locations',
+            'product_images', 'bank_accounts', 'payments', 'tax_rates',
+            'unknown_products', 'reports'
+        ]
+        
+        # Initialize missing keys
+        for key in required_keys:
+            if key not in self.data:
+                self.data[key] = []
+        
+        # If database is completely empty, set up default data
+        if not any(len(self.data[key]) > 0 for key in required_keys):
             # Create default admin user with hashed password
             self.add_user({
                 'username': 'admin',
@@ -159,17 +140,51 @@ class JSONDatabase:
                 self.data['system_settings'].append(setting)
             
             self._save_data()
-    
-    def _hash_password(self, password: str) -> str:
-        """Hash password using SHA-256 with salt"""
-        salt = "inventory_system_salt"
-        return hashlib.sha256((password + salt).encode()).hexdigest()
-    
-    # System Settings Management
+        else:
+            # Ensure system_settings has default values if missing
+            if not self.data['system_settings']:
+                default_settings = [
+                    {"setting_name": "company_name", "setting_value": "My Inventory Inc.", "description": "Company name"},
+                    {"setting_name": "company_address", "setting_value": "123 Business St, City", "description": "Company address"},
+                    {"setting_name": "company_phone", "setting_value": "+1 234 567 8900", "description": "Company phone"},
+                    {"setting_name": "company_email", "setting_value": "info@myinventory.com", "description": "Company email"},
+                    {"setting_name": "company_logo", "setting_value": "", "description": "Path to company logo"},
+                    {"setting_name": "invoice_prefix", "setting_value": "INV", "description": "Invoice prefix"},
+                    {"setting_name": "invoice_header", "setting_value": "INVOICE", "description": "Invoice header text"},
+                    {"setting_name": "invoice_subheader", "setting_value": "Thank you for your business", "description": "Invoice subheader"},
+                    {"setting_name": "invoice_footer", "setting_value": "Terms & Conditions: Payment due within 30 days", "description": "Invoice footer"},
+                    {"setting_name": "currency_symbol", "setting_value": "$", "description": "Currency symbol"},
+                    {"setting_name": "currency_code", "setting_value": "USD", "description": "Currency code"},
+                    {"setting_name": "barcode_prefix", "setting_value": "PRD", "description": "Barcode prefix"},
+                    {"setting_name": "low_stock_threshold", "setting_value": "5", "description": "Low stock threshold"},
+                    {"setting_name": "default_tax_rate_id", "setting_value": "", "description": "Default tax rate ID"},
+                    {"setting_name": "auto_detect_products", "setting_value": "true", "description": "Enable auto product detection"},
+                    {"setting_name": "auto_create_unknown_products", "setting_value": "false", "description": "Auto create unknown products"},
+                    {"setting_name": "report_export_path", "setting_value": "reports", "description": "Path to save reports"},
+                    {"setting_name": "enable_barcode_scanning", "setting_value": "true", "description": "Enable barcode scanning"},
+                    {"setting_name": "enable_analytics", "setting_value": "true", "description": "Enable analytics dashboard"},
+                    {"setting_name": "enable_auto_backup", "setting_value": "true", "description": "Enable automatic backups"}
+                ]
+                
+                for setting in default_settings:
+                    self.data['system_settings'].append(setting)
+                self._save_data()
+
+    # System Settings Management with error handling
     def get_setting(self, setting_name: str, default: str = None):
         """Get a system setting value"""
-        setting = next((s for s in self.data['system_settings'] if s['setting_name'] == setting_name), None)
-        return setting['setting_value'] if setting else default
+        try:
+            # Ensure system_settings exists
+            if 'system_settings' not in self.data:
+                self.data['system_settings'] = []
+                self._save_data()
+                return default
+                
+            setting = next((s for s in self.data['system_settings'] if s['setting_name'] == setting_name), None)
+            return setting['setting_value'] if setting else default
+        except Exception as e:
+            st.error(f"Error getting setting {setting_name}: {e}")
+            return default
     
     def update_setting(self, setting_name: str, setting_value: str):
         """Update a system setting"""
