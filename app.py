@@ -2639,6 +2639,10 @@ def generate_invoice_pdf(invoice_number: str):
 # System Settings Management UI
 # =============================================
 
+# =============================================
+# System Settings Management UI
+# =============================================
+
 def system_settings():
     """System settings management interface with complete backup functionality"""
     if not check_permission("admin"):
@@ -2887,61 +2891,79 @@ def system_settings():
             
             if uploaded_file is not None:
                 try:
-                    backup_content = json.load(uploaded_file)
+                    # Read and parse the uploaded file
+                    backup_content = uploaded_file.getvalue().decode('utf-8')
+                    backup_data = json.loads(backup_content)
+                    
                     st.info(f"Backup file loaded: {uploaded_file.name}")
                     
                     # Validate backup structure
-                    required_sections = ["settings", "users", "products", "customers", "transactions"]
-                    valid_backup = all(section in backup_content for section in required_sections)
-                    
-                    if st.button("Import Backup"):
-                        if valid_backup:
-                            backup_name = f"restored_{uploaded_file.name.split('.')[0]}_{datetime.datetime.now().strftime('%Y%m%d')}"
-                            backup_id = db.create_backup(
-                                backup_name=backup_name, 
-                                backup_data=json.dumps(backup_content)
-                            )
-                            if backup_id:
-                                st.success("Backup uploaded successfully!")
-                                time.sleep(1)
-                                st.rerun()
-                        else:
-                            st.error("Invalid backup format. Missing required sections.")
+                    if not isinstance(backup_data, dict):
+                        st.error("Invalid backup format: Expected JSON object")
+                    else:
+                        # Check if it's a valid backup
+                        is_valid_backup = (
+                            'metadata' in backup_data or 
+                            'settings' in backup_data or 
+                            'users' in backup_data or 
+                            'products' in backup_data
+                        )
+                        
+                        if st.button("Import Backup"):
+                            if is_valid_backup:
+                                backup_name = f"restored_{uploaded_file.name.split('.')[0]}_{datetime.datetime.now().strftime('%Y%m%d')}"
+                                backup_id = db.create_backup(
+                                    backup_name=backup_name, 
+                                    backup_data=json.dumps(backup_data)
+                                )
+                                if backup_id:
+                                    st.success("Backup uploaded successfully!")
+                                    time.sleep(1)
+                                    st.rerun()
+                            else:
+                                st.error("Invalid backup format. The file doesn't contain valid backup data.")
                 except json.JSONDecodeError:
-                    st.error("Invalid JSON file format")
+                    st.error("Invalid JSON file format. Please upload a valid JSON backup file.")
+                except UnicodeDecodeError:
+                    st.error("File encoding error. Please upload a valid UTF-8 encoded JSON file.")
                 except Exception as e:
                     st.error(f"Error processing backup file: {str(e)}")
 
         # List and manage backups
         st.write("#### Available Backups")
-        backups = db.data['backups']  # Access backups directly from database
+        backups = db.data.get('backups', [])
         
         if backups:
             for backup in backups:
-                with st.expander(f"{backup['name']} - {backup['created_at']}"):
+                with st.expander(f"{backup.get('name', 'Unnamed Backup')} - {backup.get('created_at', 'Unknown date')}"):
                     try:
-                        backup_data = json.loads(backup['data'])
-                        st.write(f"**Description:** {backup_data.get('metadata', {}).get('description', 'No description')}")
-                        st.write(f"**Contains:**")
+                        # Parse backup data
+                        backup_data = json.loads(backup.get('data', '{}'))
                         
+                        # Display backup info
+                        metadata = backup_data.get('metadata', {})
+                        st.write(f"**Description:** {metadata.get('description', 'No description')}")
+                        st.write(f"**Created:** {metadata.get('created_at', 'Unknown')}")
+                        
+                        # Show what's included
+                        st.write("**Contains:**")
                         cols = st.columns(3)
-                        with cols[0]:
-                            if 'users' in backup_data:
-                                st.write(f"👥 {len(backup_data['users'])} users")
-                            if 'settings' in backup_data:
-                                st.write(f"⚙️ {len(backup_data['settings'])} settings")
-                        with cols[1]:
-                            if 'products' in backup_data:
-                                st.write(f"🛍️ {len(backup_data['products'])} products")
-                            if 'tax_rates' in backup_data:
-                                st.write(f"💰 {len(backup_data['tax_rates'])} tax rates")
-                        with cols[2]:
-                            if 'customers' in backup_data:
-                                st.write(f"👤 {len(backup_data['customers'])} customers")
-                            if 'transactions' in backup_data:
-                                st.write(f"🧾 {len(backup_data['transactions'])} transactions")
-                    except:
-                        st.warning("Could not parse backup details")
+                        sections = [
+                            ('users', '👥 Users'),
+                            ('products', '🛍️ Products'),
+                            ('customers', '👤 Customers'),
+                            ('settings', '⚙️ Settings'),
+                            ('transactions', '🧾 Transactions'),
+                            ('tax_rates', '💰 Tax Rates')
+                        ]
+                        
+                        for i, (key, label) in enumerate(sections):
+                            with cols[i % 3]:
+                                if key in backup_data:
+                                    count = len(backup_data[key]) if isinstance(backup_data[key], list) else 1
+                                    st.write(f"{label}: {count}")
+                    except Exception as e:
+                        st.warning(f"Could not parse backup details: {str(e)}")
                     
                     # Backup actions
                     col1, col2, col3 = st.columns(3)
@@ -2951,18 +2973,22 @@ def system_settings():
                                 success, message = db.restore_backup(backup['id'])
                                 if success:
                                     st.success(message)
-                                    time.sleep(1)
+                                    time.sleep(2)
                                     st.rerun()
                                 else:
                                     st.error(message)
                     with col2:
-                        st.download_button(
-                            label="📥 Download",
-                            data=backup['data'],
-                            file_name=f"{backup['name']}.json",
-                            mime="application/json",
-                            key=f"download_{backup['id']}"
-                        )
+                        try:
+                            backup_data_str = backup.get('data', '')
+                            st.download_button(
+                                label="📥 Download",
+                                data=backup_data_str,
+                                file_name=f"{backup.get('name', 'backup')}.json",
+                                mime="application/json",
+                                key=f"download_{backup['id']}"
+                            )
+                        except Exception as e:
+                            st.error(f"Error creating download: {str(e)}")
                     with col3:
                         if st.button("🗑️ Delete", key=f"delete_{backup['id']}"):
                             if st.warning("Delete this backup permanently?"):
