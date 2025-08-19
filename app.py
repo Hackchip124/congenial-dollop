@@ -282,13 +282,17 @@ class JSONDatabase:
             st.error(f"Error adding user: {e}")
             return None
     
-    def get_user(self, username: str):
-        """Get user by username"""
-        try:
-            return next(u for u in self.data['users'] if u['username'] == username), None
-        except Exception as e:
-            st.error(f"Error getting user {username}: {e}")
-            return None
+    def get_users(self):
+     """Get all users"""
+     try:
+         # Ensure users key exists and return empty list if not
+         if 'users' not in self.data:
+            self.data['users'] = []
+            self._save_data()
+         return self.data['users']
+     except Exception as e:
+         st.error(f"Error getting users: {e}")
+         return []  # Always return a list, never None
     
     def get_user_by_id(self, user_id: str):
      """Get user by ID"""
