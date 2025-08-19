@@ -291,20 +291,24 @@ class JSONDatabase:
             return None
     
     def get_user_by_id(self, user_id: str):
-        """Get user by ID"""
-        try:
-            return next(u for u in self.data['users'] if u['id'] == user_id), None
-        except Exception as e:
-            st.error(f"Error getting user by ID {user_id}: {e}")
-            return None
+     """Get user by ID"""
+     try:
+         # Ensure we return a single user dict, not a list or tuple
+         users = [u for u in self.data['users'] if u.get('id') == user_id]
+         return users[0] if users else None
+     except Exception as e:
+         st.error(f"Error getting user by ID {user_id}: {e}")
+         return None
     
-    def get_users(self):
-        """Get all users"""
-        try:
-            return self.data['users']
-        except Exception as e:
-            st.error(f"Error getting users: {e}")
-            return []
+    def get_user(self, username: str):
+     """Get user by username"""
+     try:
+         # Ensure we return a single user dict, not a list or tuple
+         users = [u for u in self.data['users'] if u.get('username') == username]
+         return users[0] if users else None
+     except Exception as e:
+         st.error(f"Error getting user {username}: {e}")
+         return None
     
     def update_user(self, user_id: str, update_data: dict):
         """Update user information"""
@@ -1353,6 +1357,13 @@ def login(username: str, password: str) -> bool:
         if not user:
             return False
         
+        # Check if user is a tuple (incorrect return format)
+        if isinstance(user, tuple):
+            # Extract the actual user dict from tuple if needed
+            user = user[0] if user and isinstance(user[0], dict) else None
+            if not user:
+                return False
+        
         # Check if account is locked
         if user.get('failed_login_attempts', 0) >= 5:
             last_failed = datetime.datetime.fromisoformat(user.get('last_failed_login', '2000-01-01'))
@@ -1361,25 +1372,25 @@ def login(username: str, password: str) -> bool:
                 return False
         
         # Check credentials
-        if user['password'] == db._hash_password(password) and user.get('is_active', True):
+        if user.get('password') == db._hash_password(password) and user.get('is_active', True):
             st.session_state.authenticated = True
-            st.session_state.current_user = user['username']
-            st.session_state.current_role = user['role']
-            st.session_state.user_id = user['id']
+            st.session_state.current_user = user.get('username', '')
+            st.session_state.current_role = user.get('role', '')
+            st.session_state.user_id = user.get('id', '')
             st.session_state.user_email = user.get('email', '')
             
             # Reset failed attempts
-            db.update_user(user['id'], {
+            db.update_user(user.get('id'), {
                 'failed_login_attempts': 0,
                 'last_login': datetime.datetime.now().isoformat()
             })
             
             # Log the login
-            db.log_audit(user['id'], "login")
+            db.log_audit(user.get('id'), "login")
             return True
         else:
             # Increment failed attempts
-            db.update_user(user['id'], {
+            db.update_user(user.get('id'), {
                 'failed_login_attempts': user.get('failed_login_attempts', 0) + 1,
                 'last_failed_login': datetime.datetime.now().isoformat()
             })
@@ -1387,7 +1398,6 @@ def login(username: str, password: str) -> bool:
     except Exception as e:
         st.error(f"Login error: {e}")
     return False
-
 def login_form():
     """Enhanced login form with security features"""
     col1, col2, col3 = st.columns([1, 3, 1])
@@ -1408,7 +1418,6 @@ def login_form():
             
             if st.button("Forgot Password?", use_container_width=True):
                 st.info("Please contact your system administrator to reset your password")
-
 def logout():
     """Log out the current user with audit logging"""
     if st.session_state.authenticated:
