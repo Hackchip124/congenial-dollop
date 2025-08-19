@@ -2806,6 +2806,10 @@ def user_management():
 # COMPLETE INVENTORY MANAGEMENT MODULE
 # =============================================
 
+# =============================================
+# COMPLETE INVENTORY MANAGEMENT MODULE
+# =============================================
+
 def inventory_dashboard():
     """Inventory management with deduct stock functionality"""
     st.subheader("📦 Inventory Management")
@@ -2956,7 +2960,7 @@ def inventory_dashboard():
         add_product_form()
 
     # =========================================
-    # TAB 3: BULK OPERATIONS
+    # TAB 3: BULK OPERATIONS - FIXED
     # =========================================
     with tab3:
         st.write("### Bulk Operations")
@@ -2999,36 +3003,68 @@ def inventory_dashboard():
                     if st.button("Process Import"):
                         with st.spinner("Importing products..."):
                             success_count = 0
-                            for _, row in import_df.iterrows():
-                                # Get category ID
-                                category = next((c for c in db.get_categories() if c['name'].lower() == str(row['category']).lower()), None)
-                                category_id = category['id'] if category else None
-                                
-                                # Get brand ID
-                                brand = next((b for b in db.get_brands() if b['name'].lower() == str(row['brand']).lower()), None)
-                                brand_id = brand['id'] if brand else None
-                                
-                                # Get supplier ID
-                                supplier = next((s for s in db.get_suppliers() if s['name'].lower() == str(row['supplier']).lower()), None)
-                                supplier_id = supplier['id'] if supplier else None
-                                
-                                product_data = {
-                                    'name': row['name'],
-                                    'description': str(row.get('description', '')),
-                                    'price': float(row['price']),
-                                    'cost': float(row.get('cost', 0)),
-                                    'quantity': int(row.get('quantity', 0)),
-                                    'min_stock': int(row.get('min_stock', 5)),
-                                    'barcode': str(row.get('barcode', '')),
-                                    'category_id': category_id,
-                                    'brand_id': brand_id,
-                                    'supplier_id': supplier_id
-                                }
-                                
-                                if db.add_inventory_item(product_data):
-                                    success_count += 1
+                            error_count = 0
+                            error_messages = []
                             
-                            st.success(f"Imported {success_count}/{len(import_df)} products successfully")
+                            for idx, row in import_df.iterrows():
+                                try:
+                                    # Get category ID
+                                    category = next((c for c in db.get_categories() if c['name'].lower() == str(row['category']).lower()), None)
+                                    category_id = category['id'] if category else None
+                                    
+                                    # Get brand ID
+                                    brand = next((b for b in db.get_brands() if b['name'].lower() == str(row['brand']).lower()), None)
+                                    brand_id = brand['id'] if brand else None
+                                    
+                                    # Get supplier ID
+                                    supplier = next((s for s in db.get_suppliers() if s['name'].lower() == str(row['supplier']).lower()), None)
+                                    supplier_id = supplier['id'] if supplier else None
+                                    
+                                    # Handle NaN values with proper defaults
+                                    name = str(row['name']) if pd.notna(row['name']) else f"Imported Product {idx+1}"
+                                    description = str(row['description']) if pd.notna(row.get('description')) else ""
+                                    
+                                    # Handle numeric values with NaN protection
+                                    price = float(row['price']) if pd.notna(row['price']) else 0.0
+                                    cost = float(row['cost']) if pd.notna(row.get('cost')) else 0.0
+                                    
+                                    # Handle integer values with NaN protection
+                                    quantity = int(row['quantity']) if pd.notna(row.get('quantity')) else 0
+                                    min_stock = int(row['min_stock']) if pd.notna(row.get('min_stock')) else 5
+                                    
+                                    # Handle barcode
+                                    barcode = str(row['barcode']) if pd.notna(row.get('barcode')) else ""
+                                    
+                                    product_data = {
+                                        'name': name,
+                                        'description': description,
+                                        'price': price,
+                                        'cost': cost,
+                                        'quantity': quantity,
+                                        'min_stock': min_stock,
+                                        'barcode': barcode,
+                                        'category_id': category_id,
+                                        'brand_id': brand_id,
+                                        'supplier_id': supplier_id
+                                    }
+                                    
+                                    if db.add_inventory_item(product_data):
+                                        success_count += 1
+                                except Exception as e:
+                                    error_count += 1
+                                    error_messages.append(f"Row {idx+1}: {str(e)}")
+                                    continue
+                            
+                            # Show import results
+                            if success_count > 0:
+                                st.success(f"Successfully imported {success_count}/{len(import_df)} products")
+                            
+                            if error_count > 0:
+                                st.error(f"Failed to import {error_count} products")
+                                with st.expander("Show error details"):
+                                    for error in error_messages:
+                                        st.write(error)
+                                    
                 except Exception as e:
                     st.error(f"Import error: {str(e)}")
         
@@ -3393,7 +3429,7 @@ def edit_product_form(product):
             if st.button("Cancel"):
                 del st.session_state.edit_product
                 st.rerun()
-
+                
 def add_product_form():
     """Form for adding new products"""
     with st.form("add_product_form", clear_on_submit=True):
