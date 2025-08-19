@@ -1274,18 +1274,42 @@ class JSONDatabase:
             st.error(f"Error creating backup: {e}")
             return None
     
+    # In the JSONDatabase class, fix the restore_backup method:
+
     def restore_backup(self, backup_id: str):
-        """Restore database from a backup"""
-        try:
-            backup = next((b for b in self.data['backups'] if b['id'] == backup_id), None)
-            if not backup:
-                return False, "Backup not found"
-                
-            self.data = json.loads(backup['data'])
-            self._save_data()
-            return True, "Backup restored successfully"
-        except Exception as e:
-            return False, f"Error restoring backup: {e}"
+     """Restore database from a backup"""
+     try:
+         backup = next((b for b in self.data['backups'] if b['id'] == backup_id), None)
+         if not backup:
+             return False, "Backup not found"
+        
+         # Parse the backup data
+         backup_data = json.loads(backup['data'])
+        
+         # Restore each section from the backup
+         if 'settings' in backup_data:
+            self.data['system_settings'] = backup_data['settings']
+        
+         if 'users' in backup_data:
+            self.data['users'] = backup_data['users']
+        
+         if 'products' in backup_data:
+            self.data['inventory'] = backup_data['products']
+         
+         if 'customers' in backup_data:
+            self.data['customers'] = backup_data['customers']
+        
+         if 'transactions' in backup_data:
+            self.data['transactions'] = backup_data['transactions']
+        
+         if 'tax_rates' in backup_data:
+            self.data['tax_rates'] = backup_data['tax_rates']
+        
+         # Save the restored data
+         self._save_data()
+         return True, "Backup restored successfully"
+     except Exception as e:
+         return False, f"Error restoring backup: {e}"
     
     def delete_backup(self, backup_id: str):
         """Delete a backup"""
