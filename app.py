@@ -3149,11 +3149,6 @@ def user_management():
 # =============================================
 # Inventory Dashboard
 # =============================================
-
-# =============================================
-# COMPLETE INVENTORY MANAGEMENT MODULE
-# =============================================
-
 # =============================================
 # COMPLETE INVENTORY MANAGEMENT MODULE
 # =============================================
@@ -3322,14 +3317,13 @@ def inventory_dashboard():
                 "name": ["Product 1", "Product 2"],
                 "description": ["Description 1", "Description 2"],
                 "category": ["Electronics", "Clothing"],
-                "subcategory": ["Phones", "Shirts"],
                 "brand": ["Apple", "Nike"],
+                "supplier": ["Supplier A", "Supplier B"],
                 "price": [999.99, 49.99],
                 "cost": [800.00, 30.00],
                 "quantity": [10, 25],
                 "min_stock": [5, 10],
-                "barcode": ["123456789", "987654321"],
-                "supplier": ["Supplier A", "Supplier B"]
+                "barcode": ["123456789", "987654321"]
             }
             template_df = pd.DataFrame(template_data)
             
@@ -3356,17 +3350,57 @@ def inventory_dashboard():
                             
                             for idx, row in import_df.iterrows():
                                 try:
-                                    # Get category ID
-                                    category = next((c for c in db.get_categories() if c['name'].lower() == str(row['category']).lower()), None)
-                                    category_id = category['id'] if category else None
+                                    # Get category ID - handle case where category doesn't exist
+                                    category_name = str(row['category']) if pd.notna(row['category']) else None
+                                    category_id = None
+                                    if category_name:
+                                        category = next((c for c in db.get_categories() if c['name'].lower() == category_name.lower()), None)
+                                        if category:
+                                            category_id = category['id']
+                                        else:
+                                            # Create new category if it doesn't exist
+                                            new_category = {
+                                                'name': category_name,
+                                                'description': f"Auto-created from import"
+                                            }
+                                            category_id = db.add_category(new_category)
+                                            if not category_id:
+                                                raise Exception(f"Failed to create category: {category_name}")
                                     
-                                    # Get brand ID
-                                    brand = next((b for b in db.get_brands() if b['name'].lower() == str(row['brand']).lower()), None)
-                                    brand_id = brand['id'] if brand else None
+                                    # Get brand ID - handle case where brand doesn't exist
+                                    brand_name = str(row['brand']) if pd.notna(row['brand']) else None
+                                    brand_id = None
+                                    if brand_name:
+                                        brand = next((b for b in db.get_brands() if b['name'].lower() == brand_name.lower()), None)
+                                        if brand:
+                                            brand_id = brand['id']
+                                        else:
+                                            # Create new brand if it doesn't exist
+                                            new_brand = {
+                                                'name': brand_name,
+                                                'description': f"Auto-created from import"
+                                            }
+                                            brand_id = db.add_brand(new_brand)
+                                            if not brand_id:
+                                                raise Exception(f"Failed to create brand: {brand_name}")
                                     
-                                    # Get supplier ID
-                                    supplier = next((s for s in db.get_suppliers() if s['name'].lower() == str(row['supplier']).lower()), None)
-                                    supplier_id = supplier['id'] if supplier else None
+                                    # Get supplier ID - handle case where supplier doesn't exist
+                                    supplier_name = str(row['supplier']) if pd.notna(row['supplier']) else None
+                                    supplier_id = None
+                                    if supplier_name:
+                                        supplier = next((s for s in db.get_suppliers() if s['name'].lower() == supplier_name.lower()), None)
+                                        if supplier:
+                                            supplier_id = supplier['id']
+                                        else:
+                                            # Create new supplier if it doesn't exist
+                                            new_supplier = {
+                                                'name': supplier_name,
+                                                'email': f"{supplier_name.lower().replace(' ', '')}@example.com",
+                                                'phone': "000-000-0000"
+                                            }
+                                            supplier_id = db.add_supplier(new_supplier)
+                                            if not supplier_id:
+                                                raise Exception(f"Failed to create supplier: {supplier_name}")
                                     
                                     # Handle NaN values with proper defaults
                                     name = str(row['name']) if pd.notna(row['name']) else f"Imported Product {idx+1}"
@@ -3396,8 +3430,14 @@ def inventory_dashboard():
                                         'supplier_id': supplier_id
                                     }
                                     
-                                    if db.add_inventory_item(product_data):
+                                    # Add the product
+                                    result = db.add_inventory_item(product_data)
+                                    if result:  # If returns ID (success)
                                         success_count += 1
+                                    else:  # If returns False (failure)
+                                        error_count += 1
+                                        error_messages.append(f"Row {idx+1}: Failed to add product")
+                                        
                                 except Exception as e:
                                     error_count += 1
                                     error_messages.append(f"Row {idx+1}: {str(e)}")
