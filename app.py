@@ -68,9 +68,6 @@ st.markdown("""
 # =============================================
 # Data Storage & Encryption (JSON-based)
 # =============================================
-# =============================================
-# Data Storage & Encryption (JSON-based)
-# =============================================
 
 class JSONDatabase:
     def __init__(self, db_path: str = "inventory_data.json"):
@@ -83,56 +80,48 @@ class JSONDatabase:
         try:
             if os.path.exists(self.db_path):
                 with open(self.db_path, 'r') as f:
-                    data = json.load(f)
-                    # Ensure we have a dictionary
-                    return data if isinstance(data, dict) else {}
-            return {}
-        except json.JSONDecodeError:
-            st.error("Database file is corrupted. Creating new database.")
+                    return json.load(f)
             return {}
         except Exception as e:
             st.error(f"Error loading database: {e}")
             return {}
     
     def _save_data(self):
-     """Save data to JSON file"""
-     try:
-         # Ensure directory exists
-         db_dir = os.path.dirname(self.db_path)
-         if db_dir:  # Only create directory if path contains a directory
-            os.makedirs(db_dir, exist_ok=True)
-        
-         with open(self.db_path, 'w') as f:
-            json.dump(self.data, f, indent=4)
-         return True
-     except Exception as e:
-        st.error(f"Error saving database: {e}")
-        return False
+        """Save data to JSON file"""
+        try:
+            with open(self.db_path, 'w') as f:
+                json.dump(self.data, f, indent=4)
+            return True
+        except Exception as e:
+            st.error(f"Error saving database: {e}")
+            return False
     
     def _initialize_db(self):
         """Initialize database with default structure if empty"""
-        # Define all required keys
-        required_keys = [
-            'users', 'inventory', 'suppliers', 'customers', 'transactions',
-            'invoices', 'invoice_items', 'audit_log', 'system_settings',
-            'backups', 'categories', 'subcategories', 'brands', 'locations',
-            'product_images', 'bank_accounts', 'payments', 'tax_rates',
-            'unknown_products', 'reports'
-        ]
-        
-        # Initialize missing keys
-        for key in required_keys:
-            if key not in self.data:
-                self.data[key] = []
-        
-        # Check if we need to create default data
-        needs_default_data = True
-        for key in required_keys:
-            if len(self.data[key]) > 0:
-                needs_default_data = False
-                break
-        
-        if needs_default_data:
+        if not self.data:
+            self.data = {
+                'users': [],
+                'inventory': [],
+                'suppliers': [],
+                'customers': [],
+                'transactions': [],
+                'invoices': [],
+                'invoice_items': [],
+                'audit_log': [],
+                'system_settings': [],
+                'backups': [],
+                'categories': [],
+                'subcategories': [],
+                'brands': [],
+                'locations': [],
+                'product_images': [],
+                'bank_accounts': [],
+                'payments': [],
+                'tax_rates': [],
+                'unknown_products': [],
+                'reports': []
+            }
+            
             # Create default admin user with hashed password
             self.add_user({
                 'username': 'admin',
@@ -170,36 +159,7 @@ class JSONDatabase:
                 self.data['system_settings'].append(setting)
             
             self._save_data()
-        else:
-            # Ensure system_settings has default values if missing
-            if not self.data['system_settings']:
-                default_settings = [
-                    {"setting_name": "company_name", "setting_value": "My Inventory Inc.", "description": "Company name"},
-                    {"setting_name": "company_address", "setting_value": "123 Business St, City", "description": "Company address"},
-                    {"setting_name": "company_phone", "setting_value": "+1 234 567 8900", "description": "Company phone"},
-                    {"setting_name": "company_email", "setting_value": "info@myinventory.com", "description": "Company email"},
-                    {"setting_name": "company_logo", "setting_value": "", "description": "Path to company logo"},
-                    {"setting_name": "invoice_prefix", "setting_value": "INV", "description": "Invoice prefix"},
-                    {"setting_name": "invoice_header", "setting_value": "INVOICE", "description": "Invoice header text"},
-                    {"setting_name": "invoice_subheader", "setting_value": "Thank you for your business", "description": "Invoice subheader"},
-                    {"setting_name": "invoice_footer", "setting_value": "Terms & Conditions: Payment due within 30 days", "description": "Invoice footer"},
-                    {"setting_name": "currency_symbol", "setting_value": "$", "description": "Currency symbol"},
-                    {"setting_name": "currency_code", "setting_value": "USD", "description": "Currency code"},
-                    {"setting_name": "barcode_prefix", "setting_value": "PRD", "description": "Barcode prefix"},
-                    {"setting_name": "low_stock_threshold", "setting_value": "5", "description": "Low stock threshold"},
-                    {"setting_name": "default_tax_rate_id", "setting_value": "", "description": "Default tax rate ID"},
-                    {"setting_name": "auto_detect_products", "setting_value": "true", "description": "Enable auto product detection"},
-                    {"setting_name": "auto_create_unknown_products", "setting_value": "false", "description": "Auto create unknown products"},
-                    {"setting_name": "report_export_path", "setting_value": "reports", "description": "Path to save reports"},
-                    {"setting_name": "enable_barcode_scanning", "setting_value": "true", "description": "Enable barcode scanning"},
-                    {"setting_name": "enable_analytics", "setting_value": "true", "description": "Enable analytics dashboard"},
-                    {"setting_name": "enable_auto_backup", "setting_value": "true", "description": "Enable automatic backups"}
-                ]
-                
-                for setting in default_settings:
-                    self.data['system_settings'].append(setting)
-                self._save_data()
-
+    
     def _hash_password(self, password: str) -> str:
         """Hash password using SHA-256 with salt"""
         salt = "inventory_system_salt"
@@ -208,54 +168,21 @@ class JSONDatabase:
     # System Settings Management
     def get_setting(self, setting_name: str, default: str = None):
         """Get a system setting value"""
-        try:
-            # Ensure system_settings exists
-            if 'system_settings' not in self.data:
-                self.data['system_settings'] = []
-                self._save_data()
-                return default
-                
-            setting = next((s for s in self.data['system_settings'] if s['setting_name'] == setting_name), None)
-            return setting['setting_value'] if setting else default
-        except Exception as e:
-            st.error(f"Error getting setting {setting_name}: {e}")
-            return default
+        setting = next((s for s in self.data['system_settings'] if s['setting_name'] == setting_name), None)
+        return setting['setting_value'] if setting else default
     
     def update_setting(self, setting_name: str, setting_value: str):
         """Update a system setting"""
-        try:
-            # Ensure system_settings exists
-            if 'system_settings' not in self.data:
-                self.data['system_settings'] = []
-                
-            setting = next((s for s in self.data['system_settings'] if s['setting_name'] == setting_name), None)
-            if setting:
-                setting['setting_value'] = setting_value
-                self._save_data()
-                return True
-            
-            # If setting doesn't exist, create it
-            self.data['system_settings'].append({
-                'setting_name': setting_name,
-                'setting_value': setting_value,
-                'description': ''
-            })
+        setting = next((s for s in self.data['system_settings'] if s['setting_name'] == setting_name), None)
+        if setting:
+            setting['setting_value'] = setting_value
             self._save_data()
             return True
-        except Exception as e:
-            st.error(f"Error updating setting {setting_name}: {e}")
-            return False
+        return False
     
     def get_all_settings(self):
         """Get all system settings"""
-        try:
-            if 'system_settings' not in self.data:
-                self.data['system_settings'] = []
-                self._save_data()
-            return self.data['system_settings']
-        except Exception as e:
-            st.error(f"Error getting settings: {e}")
-            return []
+        return self.data['system_settings']
     
     # User Management
     def add_user(self, user_data: dict):
@@ -282,58 +209,34 @@ class JSONDatabase:
             st.error(f"Error adding user: {e}")
             return None
     
-    def get_users(self):
-     """Get all users"""
-     try:
-         # Ensure users key exists and return empty list if not
-         if 'users' not in self.data:
-            self.data['users'] = []
-            self._save_data()
-         return self.data['users']
-     except Exception as e:
-         st.error(f"Error getting users: {e}")
-         return []  # Always return a list, never None
+    def get_user(self, username: str):
+        """Get user by username"""
+        return next((u for u in self.data['users'] if u['username'] == username), None)
     
     def get_user_by_id(self, user_id: str):
-     """Get user by ID"""
-     try:
-         # Ensure we return a single user dict, not a list or tuple
-         users = [u for u in self.data['users'] if u.get('id') == user_id]
-         return users[0] if users else None
-     except Exception as e:
-         st.error(f"Error getting user by ID {user_id}: {e}")
-         return None
+        """Get user by ID"""
+        return next((u for u in self.data['users'] if u['id'] == user_id), None)
     
-    def get_user(self, username: str):
-     """Get user by username"""
-     try:
-         # Ensure we return a single user dict, not a list or tuple
-         users = [u for u in self.data['users'] if u.get('username') == username]
-         return users[0] if users else None
-     except Exception as e:
-         st.error(f"Error getting user {username}: {e}")
-         return None
+    def get_users(self):
+        """Get all users"""
+        return self.data['users']
     
     def update_user(self, user_id: str, update_data: dict):
         """Update user information"""
-        try:
-            user = next((u for u in self.data['users'] if u['id'] == user_id), None)
-            if user:
-                # Don't allow updating username
-                if 'username' in update_data:
-                    del update_data['username']
-                    
-                # Handle password update
-                if 'password' in update_data:
-                    update_data['password'] = self._hash_password(update_data['password'])
-                    
-                user.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating user {user_id}: {e}")
-            return False
+        user = next((u for u in self.data['users'] if u['id'] == user_id), None)
+        if user:
+            # Don't allow updating username
+            if 'username' in update_data:
+                del update_data['username']
+                
+            # Handle password update
+            if 'password' in update_data:
+                update_data['password'] = self._hash_password(update_data['password'])
+                
+            user.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_user(self, user_id: str):
         """Delete a user"""
@@ -363,32 +266,20 @@ class JSONDatabase:
     
     def get_categories(self):
         """Get all categories"""
-        try:
-            return self.data['categories']
-        except Exception as e:
-            st.error(f"Error getting categories: {e}")
-            return []
+        return self.data['categories']
     
     def get_category(self, category_id: str):
         """Get a specific category by ID"""
-        try:
-            return next(c for c in self.data['categories'] if c['id'] == category_id), None
-        except Exception as e:
-            st.error(f"Error getting category {category_id}: {e}")
-            return None
+        return next((c for c in self.data['categories'] if c['id'] == category_id), None)
     
     def update_category(self, category_id: str, update_data: dict):
         """Update a category"""
-        try:
-            category = next((c for c in self.data['categories'] if c['id'] == category_id), None)
-            if category:
-                category.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating category {category_id}: {e}")
-            return False
+        category = next((c for c in self.data['categories'] if c['id'] == category_id), None)
+        if category:
+            category.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_category(self, category_id: str):
         """Delete a category"""
@@ -419,34 +310,22 @@ class JSONDatabase:
     
     def get_subcategories(self, category_id: str = None):
         """Get all subcategories, optionally filtered by category"""
-        try:
-            if category_id:
-                return [sc for sc in self.data['subcategories'] if sc['category_id'] == category_id]
-            return self.data['subcategories']
-        except Exception as e:
-            st.error(f"Error getting subcategories: {e}")
-            return []
+        if category_id:
+            return [sc for sc in self.data['subcategories'] if sc['category_id'] == category_id]
+        return self.data['subcategories']
     
     def get_subcategory(self, subcategory_id: str):
         """Get a specific subcategory by ID"""
-        try:
-            return next(sc for sc in self.data['subcategories'] if sc['id'] == subcategory_id), None
-        except Exception as e:
-            st.error(f"Error getting subcategory {subcategory_id}: {e}")
-            return None
+        return next((sc for sc in self.data['subcategories'] if sc['id'] == subcategory_id), None)
     
     def update_subcategory(self, subcategory_id: str, update_data: dict):
         """Update a subcategory"""
-        try:
-            subcategory = next((sc for sc in self.data['subcategories'] if sc['id'] == subcategory_id), None)
-            if subcategory:
-                subcategory.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating subcategory {subcategory_id}: {e}")
-            return False
+        subcategory = next((sc for sc in self.data['subcategories'] if sc['id'] == subcategory_id), None)
+        if subcategory:
+            subcategory.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_subcategory(self, subcategory_id: str):
         """Delete a subcategory"""
@@ -477,32 +356,20 @@ class JSONDatabase:
     
     def get_brands(self):
         """Get all brands"""
-        try:
-            return self.data['brands']
-        except Exception as e:
-            st.error(f"Error getting brands: {e}")
-            return []
+        return self.data['brands']
     
     def get_brand(self, brand_id: str):
         """Get a specific brand by ID"""
-        try:
-            return next(b for b in self.data['brands'] if b['id'] == brand_id), None
-        except Exception as e:
-            st.error(f"Error getting brand {brand_id}: {e}")
-            return None
+        return next((b for b in self.data['brands'] if b['id'] == brand_id), None)
     
     def update_brand(self, brand_id: str, update_data: dict):
         """Update a brand"""
-        try:
-            brand = next((b for b in self.data['brands'] if b['id'] == brand_id), None)
-            if brand:
-                brand.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating brand {brand_id}: {e}")
-            return False
+        brand = next((b for b in self.data['brands'] if b['id'] == brand_id), None)
+        if brand:
+            brand.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_brand(self, brand_id: str):
         """Delete a brand"""
@@ -533,32 +400,20 @@ class JSONDatabase:
     
     def get_locations(self):
         """Get all locations"""
-        try:
-            return self.data['locations']
-        except Exception as e:
-            st.error(f"Error getting locations: {e}")
-            return []
+        return self.data['locations']
     
     def get_location(self, location_id: str):
         """Get a specific location by ID"""
-        try:
-            return next(l for l in self.data['locations'] if l['id'] == location_id), None
-        except Exception as e:
-            st.error(f"Error getting location {location_id}: {e}")
-            return None
+        return next((l for l in self.data['locations'] if l['id'] == location_id), None)
     
     def update_location(self, location_id: str, update_data: dict):
         """Update a location"""
-        try:
-            location = next((l for l in self.data['locations'] if l['id'] == location_id), None)
-            if location:
-                location.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating location {location_id}: {e}")
-            return False
+        location = next((l for l in self.data['locations'] if l['id'] == location_id), None)
+        if location:
+            location.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_location(self, location_id: str):
         """Delete a location"""
@@ -596,39 +451,27 @@ class JSONDatabase:
     
     def get_tax_rates(self):
         """Get all tax rates"""
-        try:
-            return self.data['tax_rates']
-        except Exception as e:
-            st.error(f"Error getting tax rates: {e}")
-            return []
+        return self.data['tax_rates']
     
     def get_tax_rate(self, tax_rate_id: str):
         """Get a specific tax rate by ID"""
-        try:
-            return next(tr for tr in self.data['tax_rates'] if tr['id'] == tax_rate_id), None
-        except Exception as e:
-            st.error(f"Error getting tax rate {tax_rate_id}: {e}")
-            return None
+        return next((tr for tr in self.data['tax_rates'] if tr['id'] == tax_rate_id), None)
     
     def update_tax_rate(self, tax_rate_id: str, update_data: dict):
         """Update a tax rate"""
-        try:
-            tax_rate = next((tr for tr in self.data['tax_rates'] if tr['id'] == tax_rate_id), None)
-            if tax_rate:
-                # If setting as default, unset any other default
-                if update_data.get('is_default', False):
-                    for tr in self.data['tax_rates']:
-                        if tr['id'] != tax_rate_id:
-                            tr['is_default'] = False
-                    self.update_setting('default_tax_rate_id', tax_rate_id)
-                
-                tax_rate.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating tax rate {tax_rate_id}: {e}")
-            return False
+        tax_rate = next((tr for tr in self.data['tax_rates'] if tr['id'] == tax_rate_id), None)
+        if tax_rate:
+            # If setting as default, unset any other default
+            if update_data.get('is_default', False):
+                for tr in self.data['tax_rates']:
+                    if tr['id'] != tax_rate_id:
+                        tr['is_default'] = False
+                self.update_setting('default_tax_rate_id', tax_rate_id)
+            
+            tax_rate.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_tax_rate(self, tax_rate_id: str):
         """Delete a tax rate"""
@@ -672,8 +515,7 @@ class JSONDatabase:
                 if not prefix:
                     prefix = "PRD"
                 
-                timestamp = str(int(time.time()))[-6:]
-                item_data['sku'] = f"{prefix}-{timestamp}"
+
                             
             self.data['inventory'].append(item_data)
             self._save_data()
@@ -689,71 +531,47 @@ class JSONDatabase:
     
     def get_inventory_items(self, include_deleted: bool = False):
         """Get all inventory items"""
-        try:
-            if include_deleted:
-                return self.data['inventory']
-            return [i for i in self.data['inventory'] if not i.get('is_deleted', False)]
-        except Exception as e:
-            st.error(f"Error getting inventory items: {e}")
-            return []
+        if include_deleted:
+            return self.data['inventory']
+        return [i for i in self.data['inventory'] if not i.get('is_deleted', False)]
     
     def get_inventory_item(self, item_id: str):
         """Get a specific inventory item by ID"""
-        try:
-            return next(i for i in self.data['inventory'] if i['id'] == item_id and not i.get('is_deleted', False)), None
-        except Exception as e:
-            st.error(f"Error getting inventory item {item_id}: {e}")
-            return None
+        return next((i for i in self.data['inventory'] if i['id'] == item_id and not i.get('is_deleted', False)), None)
     
     def get_inventory_item_by_barcode(self, barcode: str):
         """Get inventory item by barcode"""
-        try:
-            return next(i for i in self.data['inventory'] if i.get('barcode') == barcode and not i.get('is_deleted', False)), None
-        except Exception as e:
-            st.error(f"Error getting inventory item by barcode {barcode}: {e}")
-            return None
+        return next((i for i in self.data['inventory'] if i.get('barcode') == barcode and not i.get('is_deleted', False)), None)
     
     def update_inventory_item(self, item_id: str, update_data: dict):
         """Update an inventory item"""
-        try:
-            item = next((i for i in self.data['inventory'] if i['id'] == item_id), None)
-            if item:
-                update_data['updated_at'] = datetime.datetime.now().isoformat()
-                item.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating inventory item {item_id}: {e}")
-            return False
+        item = next((i for i in self.data['inventory'] if i['id'] == item_id), None)
+        if item:
+            update_data['updated_at'] = datetime.datetime.now().isoformat()
+            item.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_inventory_item(self, item_id: str):
         """Soft delete an inventory item"""
-        try:
-            item = next((i for i in self.data['inventory'] if i['id'] == item_id), None)
-            if item:
-                item['is_deleted'] = True
-                item['updated_at'] = datetime.datetime.now().isoformat()
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error deleting inventory item {item_id}: {e}")
-            return False
+        item = next((i for i in self.data['inventory'] if i['id'] == item_id), None)
+        if item:
+            item['is_deleted'] = True
+            item['updated_at'] = datetime.datetime.now().isoformat()
+            self._save_data()
+            return True
+        return False
     
     def restore_inventory_item(self, item_id: str):
         """Restore a soft-deleted inventory item"""
-        try:
-            item = next((i for i in self.data['inventory'] if i['id'] == item_id), None)
-            if item:
-                item['is_deleted'] = False
-                item['updated_at'] = datetime.datetime.now().isoformat()
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error restoring inventory item {item_id}: {e}")
-            return False
+        item = next((i for i in self.data['inventory'] if i['id'] == item_id), None)
+        if item:
+            item['is_deleted'] = False
+            item['updated_at'] = datetime.datetime.now().isoformat()
+            self._save_data()
+            return True
+        return False
     
     # Supplier Management
     def add_supplier(self, supplier_data: dict):
@@ -770,32 +588,20 @@ class JSONDatabase:
     
     def get_suppliers(self):
         """Get all suppliers"""
-        try:
-            return self.data['suppliers']
-        except Exception as e:
-            st.error(f"Error getting suppliers: {e}")
-            return []
+        return self.data['suppliers']
     
     def get_supplier(self, supplier_id: str):
         """Get a specific supplier by ID"""
-        try:
-            return next(s for s in self.data['suppliers'] if s['id'] == supplier_id), None
-        except Exception as e:
-            st.error(f"Error getting supplier {supplier_id}: {e}")
-            return None
+        return next((s for s in self.data['suppliers'] if s['id'] == supplier_id), None)
     
     def update_supplier(self, supplier_id: str, update_data: dict):
         """Update a supplier"""
-        try:
-            supplier = next((s for s in self.data['suppliers'] if s['id'] == supplier_id), None)
-            if supplier:
-                supplier.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating supplier {supplier_id}: {e}")
-            return False
+        supplier = next((s for s in self.data['suppliers'] if s['id'] == supplier_id), None)
+        if supplier:
+            supplier.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_supplier(self, supplier_id: str):
         """Delete a supplier"""
@@ -826,32 +632,20 @@ class JSONDatabase:
     
     def get_customers(self):
         """Get all customers"""
-        try:
-            return self.data['customers']
-        except Exception as e:
-            st.error(f"Error getting customers: {e}")
-            return []
+        return self.data['customers']
     
     def get_customer(self, customer_id: str):
         """Get a specific customer by ID"""
-        try:
-            return next(c for c in self.data['customers'] if c['id'] == customer_id), None
-        except Exception as e:
-            st.error(f"Error getting customer {customer_id}: {e}")
-            return None
+        return next((c for c in self.data['customers'] if c['id'] == customer_id), None)
     
     def update_customer(self, customer_id: str, update_data: dict):
         """Update a customer"""
-        try:
-            customer = next((c for c in self.data['customers'] if c['id'] == customer_id), None)
-            if customer:
-                customer.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating customer {customer_id}: {e}")
-            return False
+        customer = next((c for c in self.data['customers'] if c['id'] == customer_id), None)
+        if customer:
+            customer.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_customer(self, customer_id: str):
         """Delete a customer"""
@@ -887,40 +681,24 @@ class JSONDatabase:
     
     def get_invoices(self):
         """Get all invoices"""
-        try:
-            return self.data['invoices']
-        except Exception as e:
-            st.error(f"Error getting invoices: {e}")
-            return []
+        return self.data['invoices']
     
     def get_invoice(self, invoice_id: str):
         """Get a specific invoice by ID"""
-        try:
-            return next(i for i in self.data['invoices'] if i['id'] == invoice_id), None
-        except Exception as e:
-            st.error(f"Error getting invoice {invoice_id}: {e}")
-            return None
+        return next((i for i in self.data['invoices'] if i['id'] == invoice_id), None)
     
     def get_invoice_by_number(self, invoice_number: str):
         """Get invoice by invoice number"""
-        try:
-            return next(i for i in self.data['invoices'] if i['invoice_number'] == invoice_number), None
-        except Exception as e:
-            st.error(f"Error getting invoice by number {invoice_number}: {e}")
-            return None
+        return next((i for i in self.data['invoices'] if i['invoice_number'] == invoice_number), None)
     
     def update_invoice(self, invoice_id: str, update_data: dict):
         """Update an invoice"""
-        try:
-            invoice = next((i for i in self.data['invoices'] if i['id'] == invoice_id), None)
-            if invoice:
-                invoice.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating invoice {invoice_id}: {e}")
-            return False
+        invoice = next((i for i in self.data['invoices'] if i['id'] == invoice_id), None)
+        if invoice:
+            invoice.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_invoice(self, invoice_id: str):
         """Delete an invoice"""
@@ -937,45 +715,41 @@ class JSONDatabase:
     
     def get_invoice_details(self, invoice_id: str):
         """Get complete invoice details including items"""
-        try:
-            invoice = self.get_invoice(invoice_id)
-            if not invoice:
-                return None
-                
-            items = [ii for ii in self.data['invoice_items'] if ii['invoice_id'] == invoice_id]
-            
-            # Calculate totals
-            subtotal = sum(item['unit_price'] * item['quantity'] for item in items)
-            discount = sum(item.get('discount', 0) for item in items)
-            tax = invoice.get('tax_amount', 0)
-            shipping = invoice.get('shipping_cost', 0)
-            total = subtotal - discount + tax + shipping
-            
-            # Get customer details
-            customer = self.get_customer(invoice['customer_id']) if invoice.get('customer_id') else None
-            
-            return {
-                'header': {
-                    'invoice_number': invoice['invoice_number'],
-                    'date': invoice.get('date', invoice['created_at']),
-                    'due_date': invoice.get('due_date'),
-                    'status': invoice.get('status', 'draft'),
-                    'payment_terms': invoice.get('payment_terms', 'Due on receipt'),
-                    'notes': invoice.get('notes', ''),
-                    'customer_id': invoice.get('customer_id'),
-                    'customer_name': customer['name'] if customer else 'Walk-in Customer',
-                    'customer_email': customer.get('email') if customer else '',
-                    'subtotal': subtotal,
-                    'discount': discount,
-                    'tax': tax,
-                    'shipping_cost': shipping,
-                    'total': total
-                },
-                'items': items
-            }
-        except Exception as e:
-            st.error(f"Error getting invoice details {invoice_id}: {e}")
+        invoice = self.get_invoice(invoice_id)
+        if not invoice:
             return None
+            
+        items = [ii for ii in self.data['invoice_items'] if ii['invoice_id'] == invoice_id]
+        
+        # Calculate totals
+        subtotal = sum(item['unit_price'] * item['quantity'] for item in items)
+        discount = sum(item.get('discount', 0) for item in items)
+        tax = invoice.get('tax_amount', 0)
+        shipping = invoice.get('shipping_cost', 0)
+        total = subtotal - discount + tax + shipping
+        
+        # Get customer details
+        customer = self.get_customer(invoice['customer_id']) if invoice.get('customer_id') else None
+        
+        return {
+            'header': {
+                'invoice_number': invoice['invoice_number'],
+                'date': invoice.get('date', invoice['created_at']),
+                'due_date': invoice.get('due_date'),
+                'status': invoice.get('status', 'draft'),
+                'payment_terms': invoice.get('payment_terms', 'Due on receipt'),
+                'notes': invoice.get('notes', ''),
+                'customer_id': invoice.get('customer_id'),
+                'customer_name': customer['name'] if customer else 'Walk-in Customer',
+                'customer_email': customer.get('email') if customer else '',
+                'subtotal': subtotal,
+                'discount': discount,
+                'tax': tax,
+                'shipping_cost': shipping,
+                'total': total
+            },
+            'items': items
+        }
     
     def add_invoice_item(self, item_data: dict):
         """Add an item to an invoice"""
@@ -990,24 +764,16 @@ class JSONDatabase:
     
     def get_invoice_items(self, invoice_id: str):
         """Get all items for an invoice"""
-        try:
-            return [ii for ii in self.data['invoice_items'] if ii['invoice_id'] == invoice_id]
-        except Exception as e:
-            st.error(f"Error getting invoice items for {invoice_id}: {e}")
-            return []
+        return [ii for ii in self.data['invoice_items'] if ii['invoice_id'] == invoice_id]
     
     def update_invoice_item(self, item_id: str, update_data: dict):
         """Update an invoice item"""
-        try:
-            item = next((ii for ii in self.data['invoice_items'] if ii['id'] == item_id), None)
-            if item:
-                item.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating invoice item {item_id}: {e}")
-            return False
+        item = next((ii for ii in self.data['invoice_items'] if ii['id'] == item_id), None)
+        if item:
+            item.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_invoice_item(self, item_id: str):
         """Delete an invoice item"""
@@ -1033,32 +799,20 @@ class JSONDatabase:
     
     def get_transactions(self):
         """Get all transactions"""
-        try:
-            return self.data['transactions']
-        except Exception as e:
-            st.error(f"Error getting transactions: {e}")
-            return []
+        return self.data['transactions']
     
     def get_transaction(self, transaction_id: str):
         """Get a specific transaction by ID"""
-        try:
-            return next(t for t in self.data['transactions'] if t['id'] == transaction_id), None
-        except Exception as e:
-            st.error(f"Error getting transaction {transaction_id}: {e}")
-            return None
+        return next((t for t in self.data['transactions'] if t['id'] == transaction_id), None)
     
     def update_transaction(self, transaction_id: str, update_data: dict):
         """Update a transaction"""
-        try:
-            transaction = next((t for t in self.data['transactions'] if t['id'] == transaction_id), None)
-            if transaction:
-                transaction.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating transaction {transaction_id}: {e}")
-            return False
+        transaction = next((t for t in self.data['transactions'] if t['id'] == transaction_id), None)
+        if transaction:
+            transaction.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_transaction(self, transaction_id: str):
         """Delete a transaction"""
@@ -1084,32 +838,20 @@ class JSONDatabase:
     
     def get_payments(self):
         """Get all payments"""
-        try:
-            return self.data['payments']
-        except Exception as e:
-            st.error(f"Error getting payments: {e}")
-            return []
+        return self.data['payments']
     
     def get_payment(self, payment_id: str):
         """Get a specific payment by ID"""
-        try:
-            return next(p for p in self.data['payments'] if p['id'] == payment_id), None
-        except Exception as e:
-            st.error(f"Error getting payment {payment_id}: {e}")
-            return None
+        return next((p for p in self.data['payments'] if p['id'] == payment_id), None)
     
     def update_payment(self, payment_id: str, update_data: dict):
         """Update a payment"""
-        try:
-            payment = next((p for p in self.data['payments'] if p['id'] == payment_id), None)
-            if payment:
-                payment.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating payment {payment_id}: {e}")
-            return False
+        payment = next((p for p in self.data['payments'] if p['id'] == payment_id), None)
+        if payment:
+            payment.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_payment(self, payment_id: str):
         """Delete a payment"""
@@ -1135,32 +877,20 @@ class JSONDatabase:
     
     def get_bank_accounts(self):
         """Get all bank accounts"""
-        try:
-            return self.data['bank_accounts']
-        except Exception as e:
-            st.error(f"Error getting bank accounts: {e}")
-            return []
+        return self.data['bank_accounts']
     
     def get_bank_account(self, account_id: str):
         """Get a specific bank account by ID"""
-        try:
-            return next(a for a in self.data['bank_accounts'] if a['id'] == account_id), None
-        except Exception as e:
-            st.error(f"Error getting bank account {account_id}: {e}")
-            return None
+        return next((a for a in self.data['bank_accounts'] if a['id'] == account_id), None)
     
     def update_bank_account(self, account_id: str, update_data: dict):
         """Update a bank account"""
-        try:
-            account = next((a for a in self.data['bank_accounts'] if a['id'] == account_id), None)
-            if account:
-                account.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating bank account {account_id}: {e}")
-            return False
+        account = next((a for a in self.data['bank_accounts'] if a['id'] == account_id), None)
+        if account:
+            account.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_bank_account(self, account_id: str):
         """Delete a bank account"""
@@ -1192,26 +922,18 @@ class JSONDatabase:
     
     def get_unknown_products(self, status: str = None):
         """Get unknown products, optionally filtered by status"""
-        try:
-            if status:
-                return [up for up in self.data['unknown_products'] if up['status'] == status]
-            return self.data['unknown_products']
-        except Exception as e:
-            st.error(f"Error getting unknown products: {e}")
-            return []
+        if status:
+            return [up for up in self.data['unknown_products'] if up['status'] == status]
+        return self.data['unknown_products']
     
     def update_unknown_product(self, product_id: str, update_data: dict):
         """Update an unknown product"""
-        try:
-            product = next((up for up in self.data['unknown_products'] if up['id'] == product_id), None)
-            if product:
-                product.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating unknown product {product_id}: {e}")
-            return False
+        product = next((up for up in self.data['unknown_products'] if up['id'] == product_id), None)
+        if product:
+            product.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_unknown_product(self, product_id: str):
         """Delete an unknown product"""
@@ -1243,73 +965,46 @@ class JSONDatabase:
     
     def get_audit_logs(self, user_id: str = None, action: str = None):
         """Get audit logs, optionally filtered by user or action"""
-        try:
-            logs = self.data['audit_log']
-            if user_id:
-                logs = [l for l in logs if l['user_id'] == user_id]
-            if action:
-                logs = [l for l in logs if l['action'] == action]
-            return logs
-        except Exception as e:
-            st.error(f"Error getting audit logs: {e}")
-            return []
+        logs = self.data['audit_log']
+        if user_id:
+            logs = [l for l in logs if l['user_id'] == user_id]
+        if action:
+            logs = [l for l in logs if l['action'] == action]
+        return logs
     
     # Backup Management
     def create_backup(self, backup_name: str = None, backup_data: str = None):
-        try:
-            backup_name = backup_name or f"backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            backup_data = backup_data or json.dumps(self.data)  # Use provided data or current database
-            
-            backup_entry = {
-                'id': str(uuid.uuid4()),
-                'name': backup_name,
-                'created_at': datetime.datetime.now().isoformat(),
-                'data': backup_data
-            }
-            
-            self.data['backups'].append(backup_entry)
-            self._save_data()
-            return backup_entry['id']
-        except Exception as e:
-            st.error(f"Error creating backup: {e}")
-            return None
-    
-    # In the JSONDatabase class, fix the restore_backup method:
 
-    def restore_backup(self, backup_id: str):
-     """Restore database from a backup"""
-     try:
-         backup = next((b for b in self.data['backups'] if b['id'] == backup_id), None)
-         if not backup:
-             return False, "Backup not found"
-        
-         # Parse the backup data
-         backup_data = json.loads(backup['data'])
-        
-         # Restore each section from the backup
-         if 'settings' in backup_data:
-            self.data['system_settings'] = backup_data['settings']
-        
-         if 'users' in backup_data:
-            self.data['users'] = backup_data['users']
-        
-         if 'products' in backup_data:
-            self.data['inventory'] = backup_data['products']
+      try:
+         backup_name = backup_name or f"backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+         backup_data = backup_data or json.dumps(self.data)  # Use provided data or current database
          
-         if 'customers' in backup_data:
-            self.data['customers'] = backup_data['customers']
+         backup_entry = {
+            'id': str(uuid.uuid4()),
+            'name': backup_name,
+            'created_at': datetime.datetime.now().isoformat(),
+            'data': backup_data
+         }
         
-         if 'transactions' in backup_data:
-            self.data['transactions'] = backup_data['transactions']
-        
-         if 'tax_rates' in backup_data:
-            self.data['tax_rates'] = backup_data['tax_rates']
-        
-         # Save the restored data
+         self.data['backups'].append(backup_entry)
          self._save_data()
-         return True, "Backup restored successfully"
-     except Exception as e:
-         return False, f"Error restoring backup: {e}"
+         return backup_entry['id']
+      except Exception as e:
+        st.error(f"Error creating backup: {e}")
+        return None
+    
+    def restore_backup(self, backup_id: str):
+        """Restore database from a backup"""
+        try:
+            backup = next((b for b in self.data['backups'] if b['id'] == backup_id), None)
+            if not backup:
+                return False, "Backup not found"
+                
+            self.data = json.loads(backup['data'])
+            self._save_data()
+            return True, "Backup restored successfully"
+        except Exception as e:
+            return False, f"Error restoring backup: {e}"
     
     def delete_backup(self, backup_id: str):
         """Delete a backup"""
@@ -1335,32 +1030,20 @@ class JSONDatabase:
     
     def get_reports(self):
         """Get all reports"""
-        try:
-            return self.data['reports']
-        except Exception as e:
-            st.error(f"Error getting reports: {e}")
-            return []
+        return self.data['reports']
     
     def get_report(self, report_id: str):
         """Get a specific report by ID"""
-        try:
-            return next(r for r in self.data['reports'] if r['id'] == report_id), None
-        except Exception as e:
-            st.error(f"Error getting report {report_id}: {e}")
-            return None
+        return next((r for r in self.data['reports'] if r['id'] == report_id), None)
     
     def update_report(self, report_id: str, update_data: dict):
         """Update a report"""
-        try:
-            report = next((r for r in self.data['reports'] if r['id'] == report_id), None)
-            if report:
-                report.update(update_data)
-                self._save_data()
-                return True
-            return False
-        except Exception as e:
-            st.error(f"Error updating report {report_id}: {e}")
-            return False
+        report = next((r for r in self.data['reports'] if r['id'] == report_id), None)
+        if report:
+            report.update(update_data)
+            self._save_data()
+            return True
+        return False
     
     def delete_report(self, report_id: str):
         """Delete a report"""
@@ -1385,13 +1068,6 @@ def login(username: str, password: str) -> bool:
         if not user:
             return False
         
-        # Check if user is a tuple (incorrect return format)
-        if isinstance(user, tuple):
-            # Extract the actual user dict from tuple if needed
-            user = user[0] if user and isinstance(user[0], dict) else None
-            if not user:
-                return False
-        
         # Check if account is locked
         if user.get('failed_login_attempts', 0) >= 5:
             last_failed = datetime.datetime.fromisoformat(user.get('last_failed_login', '2000-01-01'))
@@ -1400,25 +1076,25 @@ def login(username: str, password: str) -> bool:
                 return False
         
         # Check credentials
-        if user.get('password') == db._hash_password(password) and user.get('is_active', True):
+        if user['password'] == db._hash_password(password) and user.get('is_active', True):
             st.session_state.authenticated = True
-            st.session_state.current_user = user.get('username', '')
-            st.session_state.current_role = user.get('role', '')
-            st.session_state.user_id = user.get('id', '')
+            st.session_state.current_user = user['username']
+            st.session_state.current_role = user['role']
+            st.session_state.user_id = user['id']
             st.session_state.user_email = user.get('email', '')
             
             # Reset failed attempts
-            db.update_user(user.get('id'), {
+            db.update_user(user['id'], {
                 'failed_login_attempts': 0,
                 'last_login': datetime.datetime.now().isoformat()
             })
             
             # Log the login
-            db.log_audit(user.get('id'), "login")
+            db.log_audit(user['id'], "login")
             return True
         else:
             # Increment failed attempts
-            db.update_user(user.get('id'), {
+            db.update_user(user['id'], {
                 'failed_login_attempts': user.get('failed_login_attempts', 0) + 1,
                 'last_failed_login': datetime.datetime.now().isoformat()
             })
@@ -1426,6 +1102,7 @@ def login(username: str, password: str) -> bool:
     except Exception as e:
         st.error(f"Login error: {e}")
     return False
+
 def login_form():
     """Enhanced login form with security features"""
     col1, col2, col3 = st.columns([1, 3, 1])
@@ -1446,6 +1123,7 @@ def login_form():
             
             if st.button("Forgot Password?", use_container_width=True):
                 st.info("Please contact your system administrator to reset your password")
+
 def logout():
     """Log out the current user with audit logging"""
     if st.session_state.authenticated:
@@ -2667,10 +2345,6 @@ def generate_invoice_pdf(invoice_number: str):
 # System Settings Management UI
 # =============================================
 
-# =============================================
-# System Settings Management UI
-# =============================================
-
 def system_settings():
     """System settings management interface with complete backup functionality"""
     if not check_permission("admin"):
@@ -2919,79 +2593,61 @@ def system_settings():
             
             if uploaded_file is not None:
                 try:
-                    # Read and parse the uploaded file
-                    backup_content = uploaded_file.getvalue().decode('utf-8')
-                    backup_data = json.loads(backup_content)
-                    
+                    backup_content = json.load(uploaded_file)
                     st.info(f"Backup file loaded: {uploaded_file.name}")
                     
                     # Validate backup structure
-                    if not isinstance(backup_data, dict):
-                        st.error("Invalid backup format: Expected JSON object")
-                    else:
-                        # Check if it's a valid backup
-                        is_valid_backup = (
-                            'metadata' in backup_data or 
-                            'settings' in backup_data or 
-                            'users' in backup_data or 
-                            'products' in backup_data
-                        )
-                        
-                        if st.button("Import Backup"):
-                            if is_valid_backup:
-                                backup_name = f"restored_{uploaded_file.name.split('.')[0]}_{datetime.datetime.now().strftime('%Y%m%d')}"
-                                backup_id = db.create_backup(
-                                    backup_name=backup_name, 
-                                    backup_data=json.dumps(backup_data)
-                                )
-                                if backup_id:
-                                    st.success("Backup uploaded successfully!")
-                                    time.sleep(1)
-                                    st.rerun()
-                            else:
-                                st.error("Invalid backup format. The file doesn't contain valid backup data.")
+                    required_sections = ["settings", "users", "products", "customers", "transactions"]
+                    valid_backup = all(section in backup_content for section in required_sections)
+                    
+                    if st.button("Import Backup"):
+                        if valid_backup:
+                            backup_name = f"restored_{uploaded_file.name.split('.')[0]}_{datetime.datetime.now().strftime('%Y%m%d')}"
+                            backup_id = db.create_backup(
+                                backup_name=backup_name, 
+                                backup_data=json.dumps(backup_content)
+                            )
+                            if backup_id:
+                                st.success("Backup uploaded successfully!")
+                                time.sleep(1)
+                                st.rerun()
+                        else:
+                            st.error("Invalid backup format. Missing required sections.")
                 except json.JSONDecodeError:
-                    st.error("Invalid JSON file format. Please upload a valid JSON backup file.")
-                except UnicodeDecodeError:
-                    st.error("File encoding error. Please upload a valid UTF-8 encoded JSON file.")
+                    st.error("Invalid JSON file format")
                 except Exception as e:
                     st.error(f"Error processing backup file: {str(e)}")
 
         # List and manage backups
         st.write("#### Available Backups")
-        backups = db.data.get('backups', [])
+        backups = db.data['backups']  # Access backups directly from database
         
         if backups:
             for backup in backups:
-                with st.expander(f"{backup.get('name', 'Unnamed Backup')} - {backup.get('created_at', 'Unknown date')}"):
+                with st.expander(f"{backup['name']} - {backup['created_at']}"):
                     try:
-                        # Parse backup data
-                        backup_data = json.loads(backup.get('data', '{}'))
+                        backup_data = json.loads(backup['data'])
+                        st.write(f"**Description:** {backup_data.get('metadata', {}).get('description', 'No description')}")
+                        st.write(f"**Contains:**")
                         
-                        # Display backup info
-                        metadata = backup_data.get('metadata', {})
-                        st.write(f"**Description:** {metadata.get('description', 'No description')}")
-                        st.write(f"**Created:** {metadata.get('created_at', 'Unknown')}")
-                        
-                        # Show what's included
-                        st.write("**Contains:**")
                         cols = st.columns(3)
-                        sections = [
-                            ('users', '👥 Users'),
-                            ('products', '🛍️ Products'),
-                            ('customers', '👤 Customers'),
-                            ('settings', '⚙️ Settings'),
-                            ('transactions', '🧾 Transactions'),
-                            ('tax_rates', '💰 Tax Rates')
-                        ]
-                        
-                        for i, (key, label) in enumerate(sections):
-                            with cols[i % 3]:
-                                if key in backup_data:
-                                    count = len(backup_data[key]) if isinstance(backup_data[key], list) else 1
-                                    st.write(f"{label}: {count}")
-                    except Exception as e:
-                        st.warning(f"Could not parse backup details: {str(e)}")
+                        with cols[0]:
+                            if 'users' in backup_data:
+                                st.write(f"👥 {len(backup_data['users'])} users")
+                            if 'settings' in backup_data:
+                                st.write(f"⚙️ {len(backup_data['settings'])} settings")
+                        with cols[1]:
+                            if 'products' in backup_data:
+                                st.write(f"🛍️ {len(backup_data['products'])} products")
+                            if 'tax_rates' in backup_data:
+                                st.write(f"💰 {len(backup_data['tax_rates'])} tax rates")
+                        with cols[2]:
+                            if 'customers' in backup_data:
+                                st.write(f"👤 {len(backup_data['customers'])} customers")
+                            if 'transactions' in backup_data:
+                                st.write(f"🧾 {len(backup_data['transactions'])} transactions")
+                    except:
+                        st.warning("Could not parse backup details")
                     
                     # Backup actions
                     col1, col2, col3 = st.columns(3)
@@ -3001,22 +2657,18 @@ def system_settings():
                                 success, message = db.restore_backup(backup['id'])
                                 if success:
                                     st.success(message)
-                                    time.sleep(2)
+                                    time.sleep(1)
                                     st.rerun()
                                 else:
                                     st.error(message)
                     with col2:
-                        try:
-                            backup_data_str = backup.get('data', '')
-                            st.download_button(
-                                label="📥 Download",
-                                data=backup_data_str,
-                                file_name=f"{backup.get('name', 'backup')}.json",
-                                mime="application/json",
-                                key=f"download_{backup['id']}"
-                            )
-                        except Exception as e:
-                            st.error(f"Error creating download: {str(e)}")
+                        st.download_button(
+                            label="📥 Download",
+                            data=backup['data'],
+                            file_name=f"{backup['name']}.json",
+                            mime="application/json",
+                            key=f"download_{backup['id']}"
+                        )
                     with col3:
                         if st.button("🗑️ Delete", key=f"delete_{backup['id']}"):
                             if st.warning("Delete this backup permanently?"):
@@ -3149,6 +2801,11 @@ def user_management():
 # =============================================
 # Inventory Dashboard
 # =============================================
+
+# =============================================
+# COMPLETE INVENTORY MANAGEMENT MODULE
+# =============================================
+
 # =============================================
 # COMPLETE INVENTORY MANAGEMENT MODULE
 # =============================================
@@ -3317,13 +2974,14 @@ def inventory_dashboard():
                 "name": ["Product 1", "Product 2"],
                 "description": ["Description 1", "Description 2"],
                 "category": ["Electronics", "Clothing"],
+                "subcategory": ["Phones", "Shirts"],
                 "brand": ["Apple", "Nike"],
-                "supplier": ["Supplier A", "Supplier B"],
                 "price": [999.99, 49.99],
                 "cost": [800.00, 30.00],
                 "quantity": [10, 25],
                 "min_stock": [5, 10],
-                "barcode": ["123456789", "987654321"]
+                "barcode": ["123456789", "987654321"],
+                "supplier": ["Supplier A", "Supplier B"]
             }
             template_df = pd.DataFrame(template_data)
             
@@ -3350,57 +3008,17 @@ def inventory_dashboard():
                             
                             for idx, row in import_df.iterrows():
                                 try:
-                                    # Get category ID - handle case where category doesn't exist
-                                    category_name = str(row['category']) if pd.notna(row['category']) else None
-                                    category_id = None
-                                    if category_name:
-                                        category = next((c for c in db.get_categories() if c['name'].lower() == category_name.lower()), None)
-                                        if category:
-                                            category_id = category['id']
-                                        else:
-                                            # Create new category if it doesn't exist
-                                            new_category = {
-                                                'name': category_name,
-                                                'description': f"Auto-created from import"
-                                            }
-                                            category_id = db.add_category(new_category)
-                                            if not category_id:
-                                                raise Exception(f"Failed to create category: {category_name}")
+                                    # Get category ID
+                                    category = next((c for c in db.get_categories() if c['name'].lower() == str(row['category']).lower()), None)
+                                    category_id = category['id'] if category else None
                                     
-                                    # Get brand ID - handle case where brand doesn't exist
-                                    brand_name = str(row['brand']) if pd.notna(row['brand']) else None
-                                    brand_id = None
-                                    if brand_name:
-                                        brand = next((b for b in db.get_brands() if b['name'].lower() == brand_name.lower()), None)
-                                        if brand:
-                                            brand_id = brand['id']
-                                        else:
-                                            # Create new brand if it doesn't exist
-                                            new_brand = {
-                                                'name': brand_name,
-                                                'description': f"Auto-created from import"
-                                            }
-                                            brand_id = db.add_brand(new_brand)
-                                            if not brand_id:
-                                                raise Exception(f"Failed to create brand: {brand_name}")
+                                    # Get brand ID
+                                    brand = next((b for b in db.get_brands() if b['name'].lower() == str(row['brand']).lower()), None)
+                                    brand_id = brand['id'] if brand else None
                                     
-                                    # Get supplier ID - handle case where supplier doesn't exist
-                                    supplier_name = str(row['supplier']) if pd.notna(row['supplier']) else None
-                                    supplier_id = None
-                                    if supplier_name:
-                                        supplier = next((s for s in db.get_suppliers() if s['name'].lower() == supplier_name.lower()), None)
-                                        if supplier:
-                                            supplier_id = supplier['id']
-                                        else:
-                                            # Create new supplier if it doesn't exist
-                                            new_supplier = {
-                                                'name': supplier_name,
-                                                'email': f"{supplier_name.lower().replace(' ', '')}@example.com",
-                                                'phone': "000-000-0000"
-                                            }
-                                            supplier_id = db.add_supplier(new_supplier)
-                                            if not supplier_id:
-                                                raise Exception(f"Failed to create supplier: {supplier_name}")
+                                    # Get supplier ID
+                                    supplier = next((s for s in db.get_suppliers() if s['name'].lower() == str(row['supplier']).lower()), None)
+                                    supplier_id = supplier['id'] if supplier else None
                                     
                                     # Handle NaN values with proper defaults
                                     name = str(row['name']) if pd.notna(row['name']) else f"Imported Product {idx+1}"
@@ -3430,14 +3048,8 @@ def inventory_dashboard():
                                         'supplier_id': supplier_id
                                     }
                                     
-                                    # Add the product
-                                    result = db.add_inventory_item(product_data)
-                                    if result:  # If returns ID (success)
+                                    if db.add_inventory_item(product_data):
                                         success_count += 1
-                                    else:  # If returns False (failure)
-                                        error_count += 1
-                                        error_messages.append(f"Row {idx+1}: Failed to add product")
-                                        
                                 except Exception as e:
                                     error_count += 1
                                     error_messages.append(f"Row {idx+1}: {str(e)}")
