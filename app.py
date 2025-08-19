@@ -3405,31 +3405,35 @@ def edit_product_form(product):
         # Form actions
         col5, col6 = st.columns(2)
         with col5:
-            if st.form_submit_button("Save Changes"):
-                update_data = {
-                    'name': name,
-                    'description': description,
-                    'price': price,
-                    'cost': cost,
-                    'quantity': quantity,
-                    'barcode': barcode,
-                    'category_id': category_id,
-                    'subcategory_id': subcategory_id if subcategory_id else None,
-                    'brand_id': brand_id if brand_id else None,
-                    'min_stock': min_stock,
-                    'max_stock': max_stock
-                }
-                
-                if db.update_inventory_item(product['id'], update_data):
-                    st.success("Product updated!")
-                    del st.session_state.edit_product
-                    time.sleep(1)
-                    st.rerun()
+            submit_button = st.form_submit_button("Save Changes")
         with col6:
-            if st.button("Cancel"):
+            cancel_button = st.form_submit_button("Cancel")
+        
+        if submit_button:
+            update_data = {
+                'name': name,
+                'description': description,
+                'price': price,
+                'cost': cost,
+                'quantity': quantity,
+                'barcode': barcode,
+                'category_id': category_id,
+                'subcategory_id': subcategory_id if subcategory_id else None,
+                'brand_id': brand_id if brand_id else None,
+                'min_stock': min_stock,
+                'max_stock': max_stock
+            }
+            
+            if db.update_inventory_item(product['id'], update_data):
+                st.success("Product updated!")
                 del st.session_state.edit_product
+                time.sleep(1)
                 st.rerun()
-                
+        
+        if cancel_button:
+            del st.session_state.edit_product
+            st.rerun()
+
 def add_product_form():
     """Form for adding new products"""
     with st.form("add_product_form", clear_on_submit=True):
