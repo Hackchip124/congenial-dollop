@@ -1830,7 +1830,7 @@ def reports_and_analytics():
         st.warning("Analytics is currently disabled in system settings")
         return
     
-    tab1, tab2, tab3, tab4 = st.tabs(["Inventory Reports", "Sales Reports", "Financial Reports", "Custom Reports"])
+    tab1, tab2, tab3= st.tabs(["Inventory Reports", "Sales Reports", "Financial Reports"])
     
     with tab1:
         st.write("### Inventory Reports")
@@ -2065,115 +2065,6 @@ def reports_and_analytics():
         else:
             st.info("No financial transactions found")
     
-    with tab4:
-        st.write("### Custom Reports")
-        
-        with st.form("custom_report_form"):
-            st.write("#### Create Custom Report")
-            
-            report_type = st.selectbox(
-                "Report Type",
-                options=["Inventory", "Sales", "Financial", "Customers", "Suppliers"],
-                key="report_type"
-            )
-            
-            report_name = st.text_input("Report Name*", key="report_name")
-            
-            # Date range
-            col1, col2 = st.columns(2)
-            with col1:
-                start_date = st.date_input("Start Date", key="report_start_date")
-            with col2:
-                end_date = st.date_input("End Date", key="report_end_date")
-            
-            if st.form_submit_button("Generate Report"):
-                if not report_name:
-                    st.error("Report name is required")
-                else:
-                    # Generate report based on type
-                    if report_type == "Inventory":
-                        items = db.get_inventory_items()
-                        report_df = pd.DataFrame(items)
-                        
-                        # Add category and brand names
-                        report_df['category'] = report_df['category_id'].apply(
-                            lambda x: next((c['name'] for c in db.get_categories() if c['id'] == x), 'Uncategorized')
-                        )
-                        report_df['brand'] = report_df['brand_id'].apply(
-                            lambda x: next((b['name'] for b in db.get_brands() if b['id'] == x), 'Unknown')
-                        )
-                        
-                        # Filter columns
-                        report_df = report_df[['name', 'brand', 'category', 'quantity', 'price', 'barcode']]
-                        
-                    elif report_type == "Sales":
-                        invoices = db.get_invoices()
-                        report_df = pd.DataFrame(invoices)
-                        
-                        # Filter by date if provided
-                        if start_date and end_date:
-                            report_df['date'] = pd.to_datetime(report_df['created_at']).dt.date
-                            report_df = report_df[
-                                (report_df['date'] >= start_date) & 
-                                (report_df['date'] <= end_date)
-                            ]
-                        
-                        # Add customer names
-                        report_df['customer'] = report_df['customer_id'].apply(
-                            lambda x: (db.get_customer(x) or {}).get('name', 'Walk-in')
-                        )
-                        
-                        # Filter columns
-                        report_df = report_df[['invoice_number', 'customer', 'total_amount', 'status', 'created_at']]
-                        
-                    elif report_type == "Financial":
-                        transactions = db.get_transactions()
-                        report_df = pd.DataFrame(transactions)
-                        
-                        # Filter by date if provided
-                        if start_date and end_date:
-                            report_df['date'] = pd.to_datetime(report_df['created_at']).dt.date
-                            report_df = report_df[
-                                (report_df['date'] >= start_date) & 
-                                (report_df['date'] <= end_date)
-                            ]
-                        
-                        # Filter columns
-                        report_df = report_df[['type', 'amount', 'description', 'created_at']]
-                        
-                    elif report_type == "Customers":
-                        customers = db.get_customers()
-                        report_df = pd.DataFrame(customers)
-                        
-                        # Filter columns
-                        report_df = report_df[['name', 'email', 'phone', 'address']]
-                        
-                    elif report_type == "Suppliers":
-                        suppliers = db.get_suppliers()
-                        report_df = pd.DataFrame(suppliers)
-                        
-                        # Filter columns
-                        report_df = report_df[['name', 'email', 'phone', 'address']]
-                    
-                    # Display report preview
-                    st.write("#### Report Preview")
-                    st.dataframe(report_df.head(), use_container_width=True)
-                    
-                    # Save report
-                    report_data = {
-                        'name': report_name,
-                        'type': report_type,
-                        'created_at': datetime.datetime.now().isoformat(),
-                        'created_by': st.session_state.user_id,
-                        'data': report_df.to_dict(orient='records')
-                    }
-                    
-                    if db.add_report(report_data):
-                        st.success("Report saved successfully!")
-                        
-                        # Export button
-                        if st.button("Export Report", key="export_custom"):
-                            export_report(report_df, report_name.lower().replace(' ', '_'))
 
 def export_report(data, report_name):
     """Export report data to CSV or Excel"""
