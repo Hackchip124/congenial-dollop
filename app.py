@@ -70,6 +70,126 @@ st.markdown("""
 # =============================================
 
 class JSONDatabase:
+    # ... existing code ...
+    
+    def get_inventory_items(self):
+        """Get all inventory items"""
+        return self.data['inventory']
+    
+    def get_inventory_item(self, item_id: str):
+        """Get a specific inventory item by ID"""
+        return next((item for item in self.data['inventory'] if item['id'] == item_id), None)
+    
+    def add_inventory_item(self, item_data: dict):
+        """Add a new inventory item"""
+        try:
+            item_data['id'] = str(uuid.uuid4())
+            item_data['created_at'] = datetime.datetime.now().isoformat()
+            self.data['inventory'].append(item_data)
+            self._save_data()
+            return item_data['id']
+        except Exception as e:
+            st.error(f"Error adding inventory item: {e}")
+            return None
+    
+    def update_inventory_item(self, item_id: str, update_data: dict):
+        """Update an inventory item"""
+        item = next((i for i in self.data['inventory'] if i['id'] == item_id), None)
+        if item:
+            item.update(update_data)
+            self._save_data()
+            return True
+        return False
+    
+    def delete_inventory_item(self, item_id: str):
+        """Delete an inventory item"""
+        try:
+            self.data['inventory'] = [i for i in self.data['inventory'] if i['id'] != item_id]
+            self._save_data()
+            return True, "Item deleted successfully"
+        except Exception as e:
+            return False, f"Error deleting item: {e}"
+    
+    def get_inventory_item_by_barcode(self, barcode: str):
+        """Get inventory item by barcode"""
+        return next((item for item in self.data['inventory'] if item.get('barcode') == barcode), None)
+
+        
+    def add_inventory_location(self, location_data: dict):
+        """Add inventory to a specific location"""
+        try:
+            location_data['id'] = str(uuid.uuid4())
+            location_data['created_at'] = datetime.datetime.now().isoformat()
+            self.data['inventory_locations'].append(location_data)
+            self._save_data()
+            return location_data['id']
+        except Exception as e:
+            st.error(f"Error adding inventory location: {e}")
+            return None
+    
+    def get_inventory_locations(self, product_id: str = None, location_id: str = None):
+        """Get inventory locations, optionally filtered by product or location"""
+        if product_id and location_id:
+            return [il for il in self.data['inventory_locations'] 
+                   if il['product_id'] == product_id and il['location_id'] == location_id]
+        elif product_id:
+            return [il for il in self.data['inventory_locations'] if il['product_id'] == product_id]
+        elif location_id:
+            return [il for il in self.data['inventory_locations'] if il['location_id'] == location_id]
+        return self.data['inventory_locations']
+    
+    def update_inventory_location(self, location_id: str, update_data: dict):
+        """Update an inventory location"""
+        location = next((il for il in self.data['inventory_locations'] if il['id'] == location_id), None)
+        if location:
+            location.update(update_data)
+            self._save_data()
+            return True
+        return False
+    
+    def get_total_inventory_by_product(self, product_id: str):
+        """Get total inventory across all locations for a product"""
+        locations = self.get_inventory_locations(product_id=product_id)
+        return sum(loc['quantity'] for loc in locations)
+    
+    def transfer_inventory(self, product_id: str, from_location_id: str, 
+                          to_location_id: str, quantity: int, reason: str = ""):
+        """Transfer inventory between locations"""
+        try:
+            # Check if source has enough inventory
+            source_loc = next((il for il in self.get_inventory_locations(product_id, from_location_id)), None)
+            if not source_loc or source_loc['quantity'] < quantity:
+                return False, "Not enough inventory at source location"
+            
+            # Update source location
+            self.update_inventory_location(source_loc['id'], {
+                'quantity': source_loc['quantity'] - quantity
+            })
+            
+            # Update or create destination location
+            dest_loc = next((il for il in self.get_inventory_locations(product_id, to_location_id)), None)
+            if dest_loc:
+                self.update_inventory_location(dest_loc['id'], {
+                    'quantity': dest_loc['quantity'] + quantity
+                })
+            else:
+                self.add_inventory_location({
+                    'product_id': product_id,
+                    'location_id': to_location_id,
+                    'quantity': quantity
+                })
+            
+            # Log the transfer
+            self.log_audit(
+                st.session_state.user_id,
+                "inventory_transfer",
+                f"Transferred {quantity} units of {product_id} from {from_location_id} to {to_location_id}. Reason: {reason}"
+            )
+            
+            return True, "Inventory transferred successfully"
+        except Exception as e:
+            return False, f"Error transferring inventory: {e}"
+        
     def __init__(self, db_path: str = "inventory_data.json"):
         self.db_path = db_path
         self.data = self._load_data()
@@ -487,91 +607,6 @@ class JSONDatabase:
         except Exception as e:
             return False, f"Error deleting tax rate: {e}"
     
-    # Inventory Management
-    def add_inventory_item(self, item_data: dict):
-        """Add a new inventory item"""
-        try:
-            item_data['id'] = str(uuid.uuid4())
-            item_data['created_at'] = datetime.datetime.now().isoformat()
-            item_data['updated_at'] = datetime.datetime.now().isoformat()
-            item_data['is_deleted'] = False
-            
-            # Generate SKU if not provided
-            if 'sku' not in item_data or not item_data['sku']:
-                prefix = ""
-                if item_data.get('category_id'):
-                    category = self.get_category(item_data['category_id'])
-                    if category:
-                        prefix += category['name'][:3].upper()
-                if item_data.get('subcategory_id'):
-                    subcategory = self.get_subcategory(item_data['subcategory_id'])
-                    if subcategory:
-                        prefix += subcategory['name'][:3].upper()
-                if item_data.get('brand_id'):
-                    brand = self.get_brand(item_data['brand_id'])
-                    if brand:
-                        prefix += brand['name'][:3].upper()
-                
-                if not prefix:
-                    prefix = "PRD"
-                
-
-                            
-            self.data['inventory'].append(item_data)
-            self._save_data()
-            
-            # If this was created from an unknown product, update that record
-            if 'unknown_product_id' in item_data:
-                self.update_unknown_product(item_data['unknown_product_id'], {'status': 'processed'})
-            
-            return item_data['id']
-        except Exception as e:
-            st.error(f"Error adding inventory item: {e}")
-            return None
-    
-    def get_inventory_items(self, include_deleted: bool = False):
-        """Get all inventory items"""
-        if include_deleted:
-            return self.data['inventory']
-        return [i for i in self.data['inventory'] if not i.get('is_deleted', False)]
-    
-    def get_inventory_item(self, item_id: str):
-        """Get a specific inventory item by ID"""
-        return next((i for i in self.data['inventory'] if i['id'] == item_id and not i.get('is_deleted', False)), None)
-    
-    def get_inventory_item_by_barcode(self, barcode: str):
-        """Get inventory item by barcode"""
-        return next((i for i in self.data['inventory'] if i.get('barcode') == barcode and not i.get('is_deleted', False)), None)
-    
-    def update_inventory_item(self, item_id: str, update_data: dict):
-        """Update an inventory item"""
-        item = next((i for i in self.data['inventory'] if i['id'] == item_id), None)
-        if item:
-            update_data['updated_at'] = datetime.datetime.now().isoformat()
-            item.update(update_data)
-            self._save_data()
-            return True
-        return False
-    
-    def delete_inventory_item(self, item_id: str):
-        """Soft delete an inventory item"""
-        item = next((i for i in self.data['inventory'] if i['id'] == item_id), None)
-        if item:
-            item['is_deleted'] = True
-            item['updated_at'] = datetime.datetime.now().isoformat()
-            self._save_data()
-            return True
-        return False
-    
-    def restore_inventory_item(self, item_id: str):
-        """Restore a soft-deleted inventory item"""
-        item = next((i for i in self.data['inventory'] if i['id'] == item_id), None)
-        if item:
-            item['is_deleted'] = False
-            item['updated_at'] = datetime.datetime.now().isoformat()
-            self._save_data()
-            return True
-        return False
     
     # Supplier Management
     def add_supplier(self, supplier_data: dict):
@@ -4051,8 +4086,17 @@ def supplier_customer_management():
 # =============================================
 # Invoice Management
 # =============================================
+# =============================================
+# Invoice Management - Improved Remove Item Functionality
+# =============================================
+# First, add the missing method to the JSONDatabase class
+
+# Now fix the invoice management form with proper submit button
+# =============================================
+# Invoice Management - Fixed Remove Item Functionality
+# =============================================
 def invoice_management():
-    """Complete Invoice Management Module with all tabs implemented"""
+    """Complete Invoice Management Module with proper remove item functionality"""
     if not check_permission("create_invoice"):
         st.warning("You don't have permission to access this section")
         return
@@ -4064,6 +4108,8 @@ def invoice_management():
         st.session_state.invoice_items = []
     if 'transaction_items' not in st.session_state:
         st.session_state.transaction_items = []
+    if 'remove_items' not in st.session_state:
+        st.session_state.remove_items = []
     
     # Main tabs
     tab1, tab2, tab3, tab4 = st.tabs([
@@ -4074,12 +4120,75 @@ def invoice_management():
     ])
     
     # =============================================
-    # TAB 1: CREATE INVOICE
+    # TAB 1: CREATE INVOICE - FIXED REMOVE ITEM
     # =============================================
     with tab1:
         st.header("📝 Create New Invoice")
         
-        with st.form("invoice_form", clear_on_submit=True):
+        # Display current items outside the form
+        if st.session_state.invoice_items:
+            st.write("#### Current Invoice Items")
+            
+            # Create a more detailed display with remove indicators
+            for idx, item in enumerate(st.session_state.invoice_items):
+                col1, col2, col3, col4, col5, col6 = st.columns([4, 1, 1, 1, 1, 1])
+                
+                with col1:
+                    st.write(f"**{item['item_name']}**")
+                
+                with col2:
+                    st.write(f"{item['quantity']}x")
+                
+                with col3:
+                    st.write(f"${item['unit_price']:.2f}")
+                
+                with col4:
+                    st.write(f"${item['discount']:.2f}")
+                
+                with col5:
+                    st.write(f"${item['total_price']:.2f}")
+                
+                with col6:
+                    # Mark item for removal (will be processed after form submission)
+                    if st.checkbox("Remove", key=f"remove_{idx}", help="Mark this item for removal"):
+                        if idx not in st.session_state.remove_items:
+                            st.session_state.remove_items.append(idx)
+                    else:
+                        if idx in st.session_state.remove_items:
+                            st.session_state.remove_items.remove(idx)
+            
+            # Process removal of marked items
+            if st.session_state.remove_items and st.button("Remove Marked Items"):
+                # Remove items in reverse order to avoid index issues
+                for idx in sorted(st.session_state.remove_items, reverse=True):
+                    st.session_state.invoice_items.pop(idx)
+                st.session_state.remove_items = []
+                st.rerun()
+            
+            st.markdown("---")
+            
+            # Calculate totals
+            tax_rates = db.get_tax_rates()
+            shipping_cost = 0.0  # Will be set in the form
+            
+            subtotal = sum(item['total_price'] for item in st.session_state.invoice_items)
+            total_discount = sum(item['discount'] for item in st.session_state.invoice_items)
+            tax_amount = subtotal * (next((tr['rate']/100 for tr in tax_rates if tr['id'] == st.session_state.get('tax_rate_id')), 0)) if st.session_state.get('tax_rate_id') else 0
+            total = subtotal + tax_amount + shipping_cost
+            
+            # Display totals in a clean format
+            totals_col1, totals_col2 = st.columns(2)
+            with totals_col1:
+                st.metric("Subtotal", f"${subtotal:.2f}")
+                st.metric("Total Discount", f"${total_discount:.2f}")
+            with totals_col2:
+                st.metric("Tax Amount", f"${tax_amount:.2f}")
+                st.metric("Shipping", f"${shipping_cost:.2f}")
+            
+            st.success(f"**Grand Total: ${total:.2f}**")
+        
+        # Main invoice form
+        with st.form("invoice_form", clear_on_submit=False):
             col1, col2 = st.columns(2)
             
             # Customer and Dates
@@ -4139,135 +4248,100 @@ def invoice_management():
                     key="inv_notes"
                 )
             
-            # Invoice Items
-            st.subheader("Invoice Items")
-            with st.expander("Add Items", expanded=True):
-                inventory_items = db.get_inventory_items()
-                
-                if not inventory_items:
-                    st.error("No products available in inventory")
-                else:
-                    item_col1, item_col2, item_col3, item_col4 = st.columns(4)
-                    
-                    with item_col1:
-                        product_id = st.selectbox(
-                            "Product*",
-                            options=[i['id'] for i in inventory_items],
-                            format_func=lambda x: (
-                                f"{next((i['name'] for i in inventory_items if i['id'] == x), 'Unknown')} "
-                                f"(Stock: {next((i['quantity'] for i in inventory_items if i['id'] == x), 0)})"
-                            ),
-                            key="inv_item_product"
-                        )
-                    
-                    with item_col2:
-                        max_qty = next(
-                            (i['quantity'] for i in inventory_items if i['id'] == product_id),
-                            0
-                        )
-                        quantity = st.number_input(
-                            "Quantity*",
-                            min_value=1,
-                            max_value=max_qty,
-                            value=min(1, max_qty),
-                            key="inv_item_qty"
-                        )
-                    
-                    with item_col3:
-                        default_price = next(
-                            (float(i['price']) for i in inventory_items if i['id'] == product_id),
-                            0.01
-                        )
-                        unit_price = st.number_input(
-                            "Unit Price*",
-                            min_value=0.01,
-                            value=default_price,
-                            step=0.01,
-                            key="inv_item_price"
-                        )
-                    
-                    with item_col4:
-                        discount = st.number_input(
-                            "Discount",
-                            min_value=0.0,
-                            value=0.0,
-                            step=0.01,
-                            key="inv_item_discount"
-                        )
-                    
-                    if st.form_submit_button("Add Item to Invoice"):
-                        product = next(
-                            (i for i in inventory_items if i['id'] == product_id),
-                            None
-                        )
-                        if product:
-                            new_item = {
-                                'item_id': product_id,
-                                'item_name': product['name'],
-                                'quantity': quantity,
-                                'unit_price': unit_price,
-                                'discount': discount,
-                                'total_price': (unit_price * quantity) - discount
-                            }
-                            st.session_state.invoice_items.append(new_item)
-                            st.rerun()
+            # Store tax_rate_id in session state for calculations
+            if tax_rate_id:
+                st.session_state.tax_rate_id = tax_rate_id
             
-            # Current Items
-            if st.session_state.invoice_items:
-                st.write("#### Current Invoice Items")
-                display_data = []
-                for idx, item in enumerate(st.session_state.invoice_items, 1):
-                    display_data.append({
-                        '#': idx,
-                        'Product': item['item_name'],
-                        'Qty': item['quantity'],
-                        'Unit Price': f"${item['unit_price']:.2f}",
-                        'Discount': f"${item['discount']:.2f}",
-                        'Total': f"${item['total_price']:.2f}"
-                    })
+            # Invoice Items - Add new items
+            st.subheader("Add New Item")
+            inventory_items = db.get_inventory_items()
+            
+            if not inventory_items:
+                st.error("No products available in inventory")
+            else:
+                item_col1, item_col2, item_col3, item_col4 = st.columns(4)
                 
-                st.table(display_data)
+                with item_col1:
+                    product_id = st.selectbox(
+                        "Product*",
+                        options=[i['id'] for i in inventory_items],
+                        format_func=lambda x: (
+                            f"{next((i['name'] for i in inventory_items if i['id'] == x), 'Unknown')} "
+                            f"(Stock: {next((i['quantity'] for i in inventory_items if i['id'] == x), 0)})"
+                        ),
+                        key="inv_item_product"
+                    )
                 
-                # Calculate totals
-                subtotal = sum(item['total_price'] for item in st.session_state.invoice_items)
-                total_discount = sum(item['discount'] for item in st.session_state.invoice_items)
-                tax_amount = subtotal * (next((tr['rate']/100 for tr in tax_rates if tr['id'] == tax_rate_id), 0)) if tax_rate_id else 0
-                total = subtotal + tax_amount + shipping_cost
+                with item_col2:
+                    max_qty = next(
+                        (i['quantity'] for i in inventory_items if i['id'] == product_id),
+                        0
+                    )
+                    quantity = st.number_input(
+                        "Quantity*",
+                        min_value=1,
+                        max_value=max_qty,
+                        value=min(1, max_qty),
+                        key="inv_item_qty"
+                    )
                 
-                # Display totals
-                st.write("##### Invoice Summary")
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.write(f"**Subtotal:** ${subtotal:.2f}")
-                    st.write(f"**Discount:** ${total_discount:.2f}")
-                with col2:
-                    st.write(f"**Tax:** ${tax_amount:.2f}")
-                    st.write(f"**Shipping:** ${shipping_cost:.2f}")
-                st.write(f"**Total Amount:** ${total:.2f}")
+                with item_col3:
+                    default_price = next(
+                        (float(i['price']) for i in inventory_items if i['id'] == product_id),
+                        0.01
+                    )
+                    unit_price = st.number_input(
+                        "Unit Price*",
+                        min_value=0.01,
+                        value=default_price,
+                        step=0.01,
+                        key="inv_item_price"
+                    )
                 
-                # Item management
-                st.write("##### Item Management")
-                remove_index = st.selectbox(
-                    "Select item to remove",
-                    options=[f"{i+1}. {item['item_name']}" 
-                            for i, item in enumerate(st.session_state.invoice_items)],
-                    index=None,
-                    key="remove_item_select"
-                )
+                with item_col4:
+                    discount = st.number_input(
+                        "Discount",
+                        min_value=0.0,
+                        value=0.0,
+                        step=0.01,
+                        key="inv_item_discount"
+                    )
                 
-                if remove_index and st.button("Remove Selected Item"):
-                    remove_idx = int(remove_index.split('.')[0]) - 1
-                    if 0 <= remove_idx < len(st.session_state.invoice_items):
-                        st.session_state.invoice_items.pop(remove_idx)
+                # Use st.form_submit_button for the add item button
+                add_item_button = st.form_submit_button("Add Item to Invoice")
+                
+                if add_item_button:
+                    product = next(
+                        (i for i in inventory_items if i['id'] == product_id),
+                        None
+                    )
+                    if product:
+                        new_item = {
+                            'item_id': product_id,
+                            'item_name': product['name'],
+                            'quantity': quantity,
+                            'unit_price': unit_price,
+                            'discount': discount,
+                            'total_price': (unit_price * quantity) - discount
+                        }
+                        st.session_state.invoice_items.append(new_item)
                         st.rerun()
             
-            # Final submission
-            if st.form_submit_button("Create Invoice", type="primary"):
+            # Final submission - Use st.form_submit_button for the main form
+            submit_button = st.form_submit_button("Create Invoice", type="primary")
+            
+            if submit_button:
                 if not st.session_state.invoice_items:
                     st.error("Please add at least one item")
                 elif not customer_id:
                     st.error("Please select a customer")
                 else:
+                    # Recalculate totals with actual shipping cost
+                    subtotal = sum(item['total_price'] for item in st.session_state.invoice_items)
+                    total_discount = sum(item['discount'] for item in st.session_state.invoice_items)
+                    tax_amount = subtotal * (next((tr['rate']/100 for tr in tax_rates if tr['id'] == tax_rate_id), 0)) if tax_rate_id else 0
+                    total = subtotal + tax_amount + shipping_cost
+                    
                     invoice_data = {
                         'customer_id': customer_id,
                         'date': invoice_date.isoformat(),
@@ -4304,7 +4378,12 @@ def invoice_management():
                                 new_qty = product['quantity'] - item['quantity']
                                 db.update_inventory_item(item['item_id'], {'quantity': max(0, new_qty)})
                         
+                        # Clear session state
                         st.session_state.invoice_items = []
+                        st.session_state.remove_items = []
+                        if 'tax_rate_id' in st.session_state:
+                            del st.session_state.tax_rate_id
+                        
                         st.success("Invoice created successfully!")
                         st.session_state.last_invoice_id = invoice_id
                         time.sleep(1)
@@ -4323,6 +4402,8 @@ def invoice_management():
                             file_name=f"{invoice['invoice_number']}.pdf",
                             mime="application/pdf"
                         )
+    
+    # [Rest of the tabs remain the same as before...]
     
     # =============================================
     # TAB 2: INVOICE LIST
